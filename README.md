@@ -2,6 +2,19 @@
 
 A comprehensive framework for testing and analyzing the reproducibility of Retrieval-Augmented Generation (RAG) systems across different configurations and distributed computing environments.
 
+## 🔬 Sources of Uncertainty in RAG Systems
+
+### 1. Embedding Uncertainty
+- **Different embedding models**: Model architecture and training differences
+- **Floating point precision**: FP16 vs FP32 computational variations
+- **Hardware variations**: Different GPU architectures and drivers
+
+### 2. Retrieval Uncertainty  
+- **Index uncertainty**: Different index types and parameters
+- **Retrieval algorithm uncertainty**: KNN implementation variations
+- **FAISS reproducibility**: CPU vs GPU versions, parallel execution effects
+- **Hardware-specific optimizations**: CUDA operations and memory management
+
 ## 🏗️ Project Structure
 
 ```
