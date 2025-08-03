@@ -47,6 +47,21 @@ class GenericDatasetLoader(BaseDatasetLoader):
     def get_dataset_name(self) -> str:
         return self.dataset_name
 
+    def _convert_numpy_types(self, obj: Any) -> Any:
+        """Convert numpy types to native Python types for JSON serialization"""
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {key: self._convert_numpy_types(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_numpy_types(item) for item in obj]
+        else:
+            return obj
+
     def load_data(self, file_path: str, **kwargs) -> List[Dict[str, Any]]:
         """Load data from various file formats"""
         file_path = Path(file_path)
@@ -130,7 +145,7 @@ class GenericDatasetLoader(BaseDatasetLoader):
                     "id": doc_id,
                     "text": text,
                     "metadata": {
-                        "original_index": int(idx),
+                        "original_index": self._convert_numpy_types(idx),
                         "text_length": len(text),
                         "word_count": len(text.split()),
                         "source": self.dataset_name
@@ -141,12 +156,12 @@ class GenericDatasetLoader(BaseDatasetLoader):
                 if additional_columns:
                     for col in additional_columns:
                         if col in df.columns and pd.notna(row[col]):
-                            doc["metadata"][col] = row[col]
+                            doc["metadata"][col] = self._convert_numpy_types(row[col])
                 else:
                     # Add all other columns as metadata
                     for col in df.columns:
                         if col not in [text_column, id_column] and pd.notna(row[col]):
-                            doc["metadata"][col] = row[col]
+                            doc["metadata"][col] = self._convert_numpy_types(row[col])
 
                 documents.append(doc)
 
@@ -221,7 +236,7 @@ class GenericDatasetLoader(BaseDatasetLoader):
                     "id": str(doc_id),
                     "text": text,
                     "metadata": {
-                        "original_index": idx,
+                        "original_index": self._convert_numpy_types(idx),
                         "text_length": len(text),
                         "word_count": len(text.split()),
                         "source": self.dataset_name
@@ -231,7 +246,7 @@ class GenericDatasetLoader(BaseDatasetLoader):
                 # Add other fields as metadata
                 for key, value in item.items():
                     if key not in [text_field, id_field]:
-                        doc["metadata"][key] = value
+                        doc["metadata"][key] = self._convert_numpy_types(value)
 
                 documents.append(doc)
 
@@ -276,7 +291,7 @@ class GenericDatasetLoader(BaseDatasetLoader):
                     "id": f"{self.dataset_name}_{idx:06d}",
                     "text": text,
                     "metadata": {
-                        "original_index": idx,
+                        "original_index": self._convert_numpy_types(idx),
                         "text_length": len(text),
                         "word_count": len(text.split()),
                         "source": self.dataset_name
@@ -712,7 +727,17 @@ def load_dataset_for_reproducibility(file_path: str,
     logger.info(f"  Avg text length: {stats['text_length_stats']['mean']:.1f} chars")
     logger.info(f"  Avg word count: {stats['word_count_stats']['mean']:.1f} words")
 
-    return documents, queries
+    # Final numpy type conversion to ensure JSON serialization compatibility
+    clean_documents = []
+    for doc in documents:
+        clean_doc = {
+            "id": doc["id"],
+            "text": doc["text"],
+            "metadata": loader._convert_numpy_types(doc["metadata"]) if hasattr(loader, '_convert_numpy_types') else doc["metadata"]
+        }
+        clean_documents.append(clean_doc)
+
+    return clean_documents, queries
 
 
 # Backward compatibility function
