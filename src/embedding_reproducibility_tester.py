@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EmbeddingConfig:
     """Configuration for embedding reproducibility testing"""
-    model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    model_name: str = "/scratch/user/u.bw269205/shared_models/bge_model"
     precision: str = "fp32"  # fp32, fp16, bf16, tf32
     deterministic: bool = True
     device: str = "cuda"
@@ -43,6 +43,29 @@ class EmbeddingConfig:
 
     def to_dict(self) -> Dict[str, Any]:
         return self.__dict__.copy()
+
+
+def create_local_model_config(model_path: str, **kwargs) -> EmbeddingConfig:
+    """Helper function to create EmbeddingConfig with local model path
+
+    Args:
+        model_path: Path to local model directory
+        **kwargs: Additional configuration parameters to override
+
+    Returns:
+        EmbeddingConfig with specified local model path
+    """
+    config_dict = {
+        "model_name": model_path,
+        "precision": "fp32",
+        "deterministic": True,
+        "device": "cuda",
+        "batch_size": 32,
+        "max_length": 512,
+        "normalize_embeddings": True
+    }
+    config_dict.update(kwargs)
+    return EmbeddingConfig(**config_dict)
 
 
 class EmbeddingReproducibilityTester:
@@ -82,7 +105,19 @@ class EmbeddingReproducibilityTester:
     def _load_model(self):
         """Load sentence transformer model"""
         if self.model is None:
-            self.model = SentenceTransformer(self.config.model_name, device=self.device)
+            # Check if model path exists for local models
+            if os.path.exists(self.config.model_name):
+                logger.info(f"Loading local model from: {self.config.model_name}")
+            else:
+                logger.warning(f"Local model path not found: {self.config.model_name}")
+                logger.info("Will attempt to load as Hugging Face model name (requires internet)")
+
+            try:
+                self.model = SentenceTransformer(self.config.model_name, device=self.device)
+                logger.info(f"Model loaded successfully on device: {self.device}")
+            except Exception as e:
+                logger.error(f"Failed to load model from {self.config.model_name}: {e}")
+                raise
 
             # Apply precision settings
             if self.config.precision == "fp16":
@@ -696,6 +731,12 @@ def test_integrated_reproducibility(csv_path: str = None,
 
     logger.info("Starting integrated reproducibility test with real data")
 
+    # Validate local model before proceeding
+    local_model_path = "/scratch/user/u.bw269205/shared_models/bge_model"
+    if not check_local_model(local_model_path):
+        logger.error("Local model validation failed. Please check the model path and files.")
+        return None
+
     # Configure RAG system
     rag_config = ExperimentConfig(
         index_type="Flat",
@@ -704,21 +745,23 @@ def test_integrated_reproducibility(csv_path: str = None,
         top_k=10
     )
 
-    # Configure embedding tests
+    # Configure embedding tests with local model
+    local_model_path = "/scratch/user/u.bw269205/shared_models/bge_model"
+
     embedding_configs = [
-        EmbeddingConfig(precision="fp32", deterministic=True),
-        EmbeddingConfig(precision="fp32", deterministic=False),
-        EmbeddingConfig(precision="fp16", deterministic=True),
-        EmbeddingConfig(precision="fp16", deterministic=False),
+        create_local_model_config(local_model_path, precision="fp32", deterministic=True),
+        create_local_model_config(local_model_path, precision="fp32", deterministic=False),
+        create_local_model_config(local_model_path, precision="fp16", deterministic=True),
+        create_local_model_config(local_model_path, precision="fp16", deterministic=False),
     ]
 
     # Add TF32 and BF16 if supported
     if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
         embedding_configs.extend([
-            EmbeddingConfig(precision="tf32", deterministic=True),
-            EmbeddingConfig(precision="tf32", deterministic=False),
-            EmbeddingConfig(precision="bf16", deterministic=True),
-            EmbeddingConfig(precision="bf16", deterministic=False),
+            create_local_model_config(local_model_path, precision="tf32", deterministic=True),
+            create_local_model_config(local_model_path, precision="tf32", deterministic=False),
+            create_local_model_config(local_model_path, precision="bf16", deterministic=True),
+            create_local_model_config(local_model_path, precision="bf16", deterministic=False),
         ])
         logger.info("Added TF32 and BF16 precision tests (both deterministic modes) (Ampere GPU detected)")
 
@@ -788,6 +831,55 @@ def test_integrated_reproducibility(csv_path: str = None,
     logger.info("="*60)
 
     return results
+
+
+def check_local_model(model_path: str) -> bool:
+    """Check if local model exists and contains required files
+
+    Args:
+        model_path: Path to local model directory
+
+    Returns:
+        True if model appears valid, False otherwise
+    """
+    if not os.path.exists(model_path):
+        logger.error(f"Model directory does not exist: {model_path}")
+        return False
+
+    # Check for common SentenceTransformer files
+    required_files = [
+        "config.json",
+        "pytorch_model.bin"  # or model.safetensors
+    ]
+
+    optional_files = [
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+    ]
+
+    missing_files = []
+    for file in required_files:
+        if not os.path.exists(os.path.join(model_path, file)):
+            missing_files.append(file)
+
+    if missing_files:
+        # Check if safetensors exists instead of pytorch_model.bin
+        if "pytorch_model.bin" in missing_files:
+            if os.path.exists(os.path.join(model_path, "model.safetensors")):
+                missing_files.remove("pytorch_model.bin")
+
+    if missing_files:
+        logger.error(f"Missing required model files in {model_path}: {missing_files}")
+        return False
+
+    logger.info(f"✅ Local model validation passed: {model_path}")
+
+    # List available files for verification
+    available_files = [f for f in os.listdir(model_path) if os.path.isfile(os.path.join(model_path, f))]
+    logger.info(f"Available model files: {available_files}")
+
+    return True
 
 
 def test_with_custom_msmarco(csv_path: str):
