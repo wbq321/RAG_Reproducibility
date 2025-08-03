@@ -129,9 +129,11 @@ class FaissRetrieval:
         if self.config.seed is not None:
             np.random.seed(self.config.seed)
             torch.manual_seed(self.config.seed)
+            
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(self.config.seed)
 
         if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(self.config.seed)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
@@ -749,11 +751,11 @@ def test_faiss_reproducibility():
 
     # Test different FAISS configurations
     configs_to_test = [
-        ExperimentConfig(index_type="Flat", deterministic_mode=True),
+        ExperimentConfig(index_type="Flat", deterministic_mode=True, seed=42),
         ExperimentConfig(index_type="Flat", deterministic_mode=False),
-        ExperimentConfig(index_type="IVF", ivf_nlist=100, deterministic_mode=True),
-        ExperimentConfig(index_type="HNSW", hnsw_M=16, deterministic_mode=True),
-        ExperimentConfig(index_type="LSH", deterministic_mode=True),
+        ExperimentConfig(index_type="IVF", ivf_nlist=100, deterministic_mode=True, seed=42),
+        ExperimentConfig(index_type="HNSW", hnsw_M=16, deterministic_mode=True, seed=42),
+        ExperimentConfig(index_type="LSH", deterministic_mode=True, seed=42),
     ]
 
     results = {}
@@ -813,7 +815,8 @@ def test_distributed_reproducibility():
         index_type="Flat",
         distributed=True,
         shard_method="hash",
-        deterministic_mode=True
+        deterministic_mode=True,
+        seed=42
     )
 
     # Create distributed tester
@@ -891,7 +894,7 @@ class GPUNonDeterminismTester:
 
         configs = [
             ExperimentConfig(use_gpu=True, deterministic_mode=False),
-            ExperimentConfig(use_gpu=True, deterministic_mode=True),
+            ExperimentConfig(use_gpu=True, deterministic_mode=True, seed=42),
         ]
 
         results = {}
