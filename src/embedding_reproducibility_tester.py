@@ -572,8 +572,27 @@ class IntegratedRAGReproducibilityTester:
         # Extract metrics for analysis
         config_metrics = {}
         for config_name in results["embedding_stability"].keys():
-            emb_stability = results["embedding_stability"][config_name]["documents"]["metrics"]
-            retrieval_repro = results["retrieval_reproducibility"][config_name]["retrieval_metrics"]
+            # Handle different result structures (process isolation vs in-process)
+            embedding_data = results["embedding_stability"][config_name]["documents"]
+
+            if "metrics" in embedding_data:
+                # In-process structure
+                emb_stability = embedding_data["metrics"]
+            elif "process_isolation" in embedding_data and embedding_data.get("process_isolation"):
+                # Process isolation structure
+                emb_stability = embedding_data.get("metrics", {})
+            else:
+                # Fallback - try to find metrics anywhere in the structure
+                emb_stability = embedding_data.get("metrics", {})
+
+            # Handle retrieval results similarly
+            retrieval_data = results["retrieval_reproducibility"][config_name]
+            if "retrieval_metrics" in retrieval_data:
+                retrieval_repro = retrieval_data["retrieval_metrics"]
+            elif "metrics" in retrieval_data:
+                retrieval_repro = retrieval_data["metrics"]
+            else:
+                retrieval_repro = {}
 
             config_metrics[config_name] = {
                 "embedding_l2_mean": emb_stability.get("l2_distance", {}).get("mean", 0),
@@ -643,7 +662,15 @@ class IntegratedRAGReproducibilityTester:
             best_stability = float('inf')
 
             for config_name, data in results["embedding_stability"].items():
-                l2_mean = data["documents"]["metrics"].get("l2_distance", {}).get("mean", float('inf'))
+                # Handle both process isolation and in-process result structures
+                if "metrics" in data:
+                    # Process isolation result structure
+                    metrics = data["metrics"]
+                else:
+                    # In-process result structure
+                    metrics = data["documents"]["metrics"]
+
+                l2_mean = metrics.get("l2_distance", {}).get("mean", float('inf'))
                 if l2_mean < best_stability:
                     best_stability = l2_mean
                     best_config = config_name
@@ -656,7 +683,14 @@ class IntegratedRAGReproducibilityTester:
             f.write("|---------------|-------------|-------------------|--------------|------------------|\n")
 
             for config_name, data in results["embedding_stability"].items():
-                metrics = data["documents"]["metrics"]
+                # Handle both process isolation and in-process result structures
+                if "metrics" in data:
+                    # Process isolation result structure
+                    metrics = data["metrics"]
+                else:
+                    # In-process result structure
+                    metrics = data["documents"]["metrics"]
+
                 l2_mean = metrics.get("l2_distance", {}).get("mean", 0)
                 cos_mean = metrics.get("cosine_similarity", {}).get("mean", 0)
                 max_diff = metrics.get("max_abs_difference", {}).get("mean", 0)
@@ -809,7 +843,14 @@ def test_integrated_reproducibility(csv_path: str = None,
     logger.info("="*60)
 
     for config_name, data in results["embedding_stability"].items():
-        doc_metrics = data["documents"]["metrics"]
+        # Handle both process isolation and in-process result structures
+        if "metrics" in data:
+            # Process isolation result structure
+            doc_metrics = data["metrics"]
+        else:
+            # In-process result structure
+            doc_metrics = data["documents"]["metrics"]
+
         ret_metrics = results["retrieval_reproducibility"][config_name]["retrieval_metrics"]
 
         l2_mean = doc_metrics.get("l2_distance", {}).get("mean", 0)

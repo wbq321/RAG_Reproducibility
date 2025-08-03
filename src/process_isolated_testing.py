@@ -161,7 +161,9 @@ class ProcessIsolatedTester:
 
     def _create_embedding_test_script(self) -> str:
         """Create Python script for isolated embedding testing"""
-        return '''
+        # Get absolute path to src directory
+        src_dir = os.path.dirname(os.path.abspath(__file__))
+        return f'''
 import sys
 import os
 import json
@@ -171,7 +173,7 @@ from typing import List, Dict, Any
 import time
 
 # Add src directory to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, "{src_dir}")
 
 def run_embedding_test(config_file: str, texts_file: str, run_idx: int) -> Dict[str, Any]:
     """Run single embedding test in isolated process"""
@@ -236,7 +238,9 @@ if __name__ == "__main__":
 
     def _create_retrieval_test_script(self) -> str:
         """Create Python script for isolated retrieval testing"""
-        return '''
+        # Get absolute path to src directory
+        src_dir = os.path.dirname(os.path.abspath(__file__))
+        return f'''
 import sys
 import os
 import json
@@ -246,7 +250,7 @@ from typing import List, Dict, Any
 import time
 
 # Add src directory to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, "{src_dir}")
 
 def run_retrieval_test(rag_config_file: str, embedding_config_file: str,
                       documents_file: str, queries_file: str, run_idx: int) -> Dict[str, Any]:
@@ -361,6 +365,14 @@ if __name__ == "__main__":
         try:
             # Set environment for deterministic execution
             env = os.environ.copy()
+
+            # Add src directory to PYTHONPATH
+            src_dir = os.path.dirname(os.path.abspath(__file__))
+            if 'PYTHONPATH' in env:
+                env['PYTHONPATH'] = f"{src_dir}{os.pathsep}{env['PYTHONPATH']}"
+            else:
+                env['PYTHONPATH'] = src_dir
+
             env.update({
                 'CUDA_LAUNCH_BLOCKING': '1',
                 'CUBLAS_WORKSPACE_CONFIG': ':4096:8',
@@ -415,6 +427,14 @@ if __name__ == "__main__":
         try:
             # Set environment for deterministic execution
             env = os.environ.copy()
+
+            # Add src directory to PYTHONPATH
+            src_dir = os.path.dirname(os.path.abspath(__file__))
+            if 'PYTHONPATH' in env:
+                env['PYTHONPATH'] = f"{src_dir}{os.pathsep}{env['PYTHONPATH']}"
+            else:
+                env['PYTHONPATH'] = src_dir
+
             env.update({
                 'CUDA_LAUNCH_BLOCKING': '1',
                 'CUBLAS_WORKSPACE_CONFIG': ':4096:8',
