@@ -129,7 +129,7 @@ class FaissRetrieval:
         if self.config.seed is not None:
             np.random.seed(self.config.seed)
             torch.manual_seed(self.config.seed)
-            
+
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(self.config.seed)
 
@@ -1078,10 +1078,11 @@ class GPUNonDeterminismTester:
 
                 # Override embedding dimension by using random embeddings
                 retrieval.encoder = None  # Disable encoder
+                retrieval.config.embedding_dim = dim  # Update config dimension
                 retrieval.doc_embeddings = np.random.randn(len(documents[:1000]), dim).astype('float32')
                 retrieval.documents = documents[:1000]
 
-                # Create index directly
+                # Create index directly with correct dimension
                 retrieval.index = retrieval._create_index()
                 retrieval.index.add(retrieval.doc_embeddings)
 
