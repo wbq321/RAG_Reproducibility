@@ -706,7 +706,14 @@ class IntegratedRAGReproducibilityTester:
             f.write("|---------------|-------------|---------|-------------|\n")
 
             for config_name, data in results["retrieval_reproducibility"].items():
-                metrics = data["retrieval_metrics"]
+                # Handle both process isolation and in-process result structures for retrieval
+                if "retrieval_metrics" in data:
+                    # In-process result structure
+                    metrics = data["retrieval_metrics"]
+                else:
+                    # Process isolation result structure - metrics might be at top level
+                    metrics = data
+                
                 exact_match = metrics.get("exact_match", {}).get("exact_match_rate", 0)
                 jaccard = metrics.get("overlap", {}).get("mean_jaccard", 0)
                 kendall = metrics.get("rank_correlation", {}).get("mean_kendall_tau", 0)
@@ -850,8 +857,15 @@ def test_integrated_reproducibility(csv_path: str = None,
         else:
             # In-process result structure
             doc_metrics = data["documents"]["metrics"]
-
-        ret_metrics = results["retrieval_reproducibility"][config_name]["retrieval_metrics"]
+        
+        # Handle both process isolation and in-process result structures for retrieval
+        ret_data = results["retrieval_reproducibility"][config_name]
+        if "retrieval_metrics" in ret_data:
+            # In-process result structure
+            ret_metrics = ret_data["retrieval_metrics"]
+        else:
+            # Process isolation result structure - metrics might be at top level
+            ret_metrics = ret_data
 
         l2_mean = doc_metrics.get("l2_distance", {}).get("mean", 0)
         cos_mean = doc_metrics.get("cosine_similarity", {}).get("mean", 1)
