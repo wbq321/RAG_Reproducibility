@@ -1,53 +1,79 @@
 # RAG Reproducibility Testing Framework
 
-A comprehensive framework for testing and analyzing the reproducibility of Retrieval-Augmented Generation (RAG) systems across different configurations and distributed computing environments.
+A comprehensive framework for testing and analyzing reproducibility in Retrieval-Augmented Generation (RAG) systems, with integrated embedding uncertainty analysis and FAISS-based retrieval testing.
+
+## 🎯 Overview
+
+This framework provides **end-to-end reproducibility testing** for RAG systems, from embedding generation through final retrieval results. It combines advanced embedding uncertainty analysis with comprehensive FAISS index testing to identify and quantify sources of non-determinism.
 
 ## 🔬 Sources of Uncertainty in RAG Systems
 
-### 1. Embedding Uncertainty
+### 1. Embedding Uncertainty (**NEW - Integrated from embedding_uncertainty/**)
 - **Different embedding models**: Model architecture and training differences
-- **Floating point precision**: FP16 vs FP32 computational variations
+- **Floating point precision**: FP16 vs FP32 vs BF16 vs TF32 computational variations
 - **Hardware variations**: Different GPU architectures and drivers
+- **Deterministic vs non-deterministic execution**: CUDA operation ordering effects
+- **Model quantization**: Precision reduction impacts on embedding stability
 
-### 2. Retrieval Uncertainty  
+### 2. Retrieval Uncertainty
 - **Index uncertainty**: Different index types and parameters
 - **Retrieval algorithm uncertainty**: KNN implementation variations
 - **FAISS reproducibility**: CPU vs GPU versions, parallel execution effects
 - **Hardware-specific optimizations**: CUDA operations and memory management
 
-## 🏗️ Project Structure
-
-```
-rag_reproducibility/
-├── README.md                   # This file
-├── setup-cluster-env.sh        # Environment setup script
-│
-├── src/                        # Core framework source code
-│   ├── distributed-rag-cluster-test.py    # Distributed testing script
-│   ├── rag_reproducibility_framework.py   # Main framework
-│   └── RAG_reproducibility_test.py        # Test implementations
-│
-├── scripts/                    # Utility and analysis scripts
-│   ├── generate-cluster-report.py         # Report generation
-│   └── optimized_small_test.py           # Optimized testing script
-│
-├── slurm/                      # SLURM job scripts
-│   ├── cluster-distributed-test.sh       # Main distributed test
-│   ├── debug-quick-test.sh               # Debug test
-│   ├── fixed_quick_test.sh               # Fixed configuration test
-│   └── quick_test_slurm.sh               # Quick validation test
-│
-├── config/                     # Configuration files
-│   └── cluster-config.json               # Main cluster configuration
-│
-├── results/                    # Test results and outputs
-├── docs/                       # Documentation
-├── examples/                   # Example usage and demos
-├── notebooks/                  # Jupyter notebooks for analysis
-└── tests/                      # Unit tests
-```
+### 3. Distributed System Uncertainty
+- **Sharding strategies**: Document distribution methods
+- **Node synchronization**: Multi-node consistency challenges
+- **Network effects**: Communication latency and ordering
+- **Load balancing**: Dynamic resource allocation impacts
 
 ## 🚀 Quick Start
+
+### Prerequisites
+```bash
+# Install core dependencies
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install faiss-gpu  # or faiss-cpu for CPU-only
+pip install sentence-transformers
+pip install numpy pandas matplotlib seaborn scipy scikit-learn
+pip install pyyaml tqdm
+
+# Optional: For distributed testing
+pip install mpi4py
+```
+
+### Run Quick Tests
+```bash
+# Quick diagnostic check
+python quick_start.py --diagnostic
+
+# Quick embedding reproducibility test
+python quick_start.py --test embedding
+
+# Quick retrieval reproducibility test
+python quick_start.py --test retrieval
+
+# Quick integrated test (embedding + retrieval)
+python quick_start.py --test integrated
+
+# All quick tests
+python quick_start.py --test all
+```
+
+### Run Comprehensive Analysis
+```bash
+# Full test suite (may take 30-60 minutes)
+python run_comprehensive_tests.py
+
+# Quick mode (reduced datasets)
+python run_comprehensive_tests.py --quick
+
+# Skip specific test categories
+python run_comprehensive_tests.py --skip-gpu --skip-distributed
+
+# Custom output directory
+python run_comprehensive_tests.py --output-dir my_results
+```
 
 ### 1. Environment Setup
 ```bash

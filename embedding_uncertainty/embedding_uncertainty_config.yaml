@@ -1,0 +1,403 @@
+# embedding_uncertainty_config.yaml
+
+# RAG Query Embedding不确定性测试配置文件
+
+
+
+# 模型配置
+
+models:
+
+  small:
+
+    - "sentence-transformers/all-MiniLM-L6-v2"  # 384维，22M参数
+
+    - "sentence-transformers/all-MiniLM-L12-v2"  # 384维，33M参数
+
+  
+
+  medium:
+
+    - "sentence-transformers/all-mpnet-base-v2"  # 768维，110M参数
+
+    - "sentence-transformers/all-distilroberta-v1"  # 768维，82M参数
+
+  
+
+  large:
+
+    - "sentence-transformers/all-roberta-large-v1"  # 1024维，355M参数
+
+  
+
+  multilingual:
+
+    - "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"  # 384维
+
+    - "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"  # 768维
+
+
+
+# 测试查询模板
+
+test_queries:
+
+  biology:
+
+    - "What are the latest CRISPR developments in {year}?"
+
+    - "How do {protein} mutations affect cellular function?"
+
+    - "Explain the role of {pathway} in cancer development"
+
+  
+
+  physics:
+
+    - "What is the current status of {quantum_topic} research?"
+
+    - "How does {phenomenon} relate to general relativity?"
+
+    - "Describe recent advances in {material} applications"
+
+  
+
+  ml_ai:
+
+    - "Compare {model1} and {model2} architectures"
+
+    - "What are the limitations of {technique} in NLP?"
+
+    - "How to implement {algorithm} for large-scale data?"
+
+
+
+# 硬件配置（集群特定）
+
+hardware_configs:
+
+  nvidia_v100:
+
+    memory: "32GB"
+
+    compute_capability: 7.0
+
+    optimal_batch_size: 64
+
+    
+
+  nvidia_a100:
+
+    memory: "40GB"
+
+    compute_capability: 8.0
+
+    optimal_batch_size: 128
+
+    
+
+  nvidia_a6000:
+
+    memory: "48GB"
+
+    compute_capability: 8.6
+
+    optimal_batch_size: 128
+
+    
+
+  nvidia_h100:
+
+    memory: "80GB"
+
+    compute_capability: 9.0
+
+    optimal_batch_size: 256
+
+
+
+# 测试参数网格
+
+test_parameters:
+
+  batch_sizes: [1, 4, 8, 16, 32, 64, 128]
+
+  
+
+  dtypes:
+
+    - "float32"
+
+    - "float16"
+
+    - "bfloat16"  # 仅在支持的GPU上
+
+  
+
+  normalization:
+
+    - true
+
+    - false
+
+  
+
+  pooling_modes:
+
+    - "mean"
+
+    - "max"
+
+    - "cls"
+
+  
+
+  # 环境因素
+
+  num_threads: [1, 2, 4, 8, 16]
+
+  
+
+  # 温度设置（如果模型支持）
+
+  temperatures: [0.0, 0.5, 1.0]
+
+
+
+# 高级测试选项
+
+advanced_tests:
+
+  # 测试模型量化的影响
+
+  quantization:
+
+    enabled: true
+
+    methods:
+
+      - "int8"
+
+      - "int4"
+
+  
+
+  # 测试ONNX转换的影响
+
+  onnx_conversion:
+
+    enabled: false
+
+    providers: ["CPUExecutionProvider", "CUDAExecutionProvider"]
+
+  
+
+  # 测试不同的注意力实现
+
+  attention_implementations:
+
+    - "standard"
+
+    - "flash_attention"  # 需要特定硬件支持
+
+    - "xformers"
+
+
+
+# 评估指标
+
+evaluation_metrics:
+
+  numerical_stability:
+
+    - "standard_deviation"
+
+    - "coefficient_of_variation"
+
+    - "max_absolute_difference"
+
+    - "frobenius_norm_variation"
+
+  
+
+  semantic_stability:
+
+    - "cosine_similarity"
+
+    - "euclidean_distance"
+
+    - "angular_distance"
+
+    - "ranking_correlation"
+
+  
+
+  performance:
+
+    - "throughput"
+
+    - "latency_p50"
+
+    - "latency_p95"
+
+    - "latency_p99"
+
+
+
+# 结果分析配置
+
+analysis:
+
+  # 统计检验
+
+  statistical_tests:
+
+    - "shapiro_wilk"  # 正态性检验
+
+    - "levene"  # 方差齐性检验
+
+    - "kruskal_wallis"  # 非参数检验
+
+    - "friedman"  # 重复测量非参数检验
+
+  
+
+  # 可视化选项
+
+  visualizations:
+
+    - "box_plots"
+
+    - "violin_plots"
+
+    - "heatmaps"
+
+    - "3d_embeddings"  # t-SNE或UMAP
+
+    - "correlation_matrices"
+
+  
+
+  # 报告格式
+
+  report_formats:
+
+    - "html"
+
+    - "pdf"
+
+    - "latex"
+
+
+
+# 集群作业配置
+
+cluster:
+
+  # SLURM设置
+
+  slurm:
+
+    partition: "gpu"
+
+    qos: "normal"
+
+    account: "your_account"
+
+    mail_type: "END,FAIL"
+
+    mail_user: "your_email@example.com"
+
+  
+
+  # 资源请求
+
+  resources:
+
+    time_limit: "24:00:00"
+
+    memory_per_cpu: "8G"
+
+    cpus_per_task: 8
+
+    gpus_per_node: 1
+
+  
+
+  # 模块加载
+
+  modules:
+
+    - "python/3.9"
+
+    - "cuda/11.7"
+
+    - "gcc/9.3.0"
+
+
+
+# 实验跟踪
+
+tracking:
+
+  # Weights & Biases配置
+
+  wandb:
+
+    enabled: true
+
+    project: "rag-embedding-uncertainty"
+
+    entity: "your_team"
+
+    tags: ["embedding", "uncertainty", "rag"]
+
+  
+
+  # TensorBoard配置
+
+  tensorboard:
+
+    enabled: true
+
+    log_dir: "./tensorboard_logs"
+
+  
+
+  # 自定义日志
+
+  logging:
+
+    level: "INFO"
+
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+    file: "embedding_test.log"
+
+
+
+# 缓存设置
+
+cache:
+
+  model_cache_dir: "/scratch/models"
+
+  results_cache_dir: "/scratch/results"
+
+  clear_cache_on_start: false
+
+  max_cache_size_gb: 100
+
+
+
+# 错误处理
+
+error_handling:
+
+  max_retries: 3
+
+  retry_delay: 60  # 秒
+
+  continue_on_error: true
+
+  save_partial_results: true

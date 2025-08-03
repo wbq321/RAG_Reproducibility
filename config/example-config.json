@@ -1,19 +1,19 @@
 {
   "_description": "Sample configuration for RAG reproducibility testing",
   "_usage": "Copy this file and modify values as needed for your experiments",
-  
+
   "hardware": {
     "device": "cuda",
     "num_gpus": 2,
     "use_gpu": true
   },
-  
+
   "embedding": {
     "model": "sentence-transformers/all-MiniLM-L6-v2",
     "embedding_dim": 384,
     "batch_size": 256
   },
-  
+
   "faiss": {
     "index_type": "IVF",
     "metric": "L2",
@@ -23,25 +23,25 @@
     "hnsw_ef_construction": 200,
     "hnsw_ef_search": 100
   },
-  
+
   "data": {
     "chunk_size": 512,
     "chunk_overlap": 50,
     "top_k": 20
   },
-  
+
   "reproducibility": {
     "seed": 42,
     "deterministic_mode": true,
     "num_threads": 8
   },
-  
+
   "distributed": {
     "enabled": true,
     "shard_method": "hash",
     "replication_factor": 1
   },
-  
+
   "testing": {
     "num_runs": 5,
     "num_docs": 100000,

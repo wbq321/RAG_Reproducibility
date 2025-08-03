@@ -1,0 +1,141 @@
+# Comprehensive RAG Reproducibility Testing Configuration
+
+# Test Data Configuration
+data:
+  num_documents: 5000
+  num_queries: 20
+  document_length_range: [100, 500]  # characters
+  query_length_range: [10, 100]     # characters
+
+# Embedding Configuration
+embedding:
+  models:
+    small: "sentence-transformers/all-MiniLM-L6-v2"
+    medium: "sentence-transformers/all-mpnet-base-v2"
+    large: "sentence-transformers/all-roberta-large-v1"
+
+  # Precision testing (integrated from embedding_uncertainty)
+  precisions:
+    - name: "fp32"
+      enabled: true
+      deterministic: [true, false]
+    - name: "fp16"
+      enabled: true
+      deterministic: [true, false]
+    - name: "bf16"
+      enabled: false  # Enable if Ampere GPU available
+      deterministic: [true]
+    - name: "tf32"
+      enabled: false  # Enable if Ampere GPU available
+      deterministic: [true]
+
+  # Stability testing
+  stability_tests:
+    num_runs: 5
+    batch_size: 32
+    max_length: 512
+    normalize_embeddings: true
+
+# FAISS Index Configuration
+faiss:
+  index_types:
+    - name: "Flat"
+      metrics: ["L2", "IP"]
+      deterministic: [true, false]
+    - name: "IVF"
+      nlist: [50, 100, 200]
+      nprobe: [5, 10, 20]
+      deterministic: [true]
+    - name: "HNSW"
+      M: [16, 32]
+      ef_construction: [200, 400]
+      ef_search: [50, 100, 200]
+      deterministic: [true]
+    - name: "LSH"
+      deterministic: [true]
+
+  # GPU configuration
+  gpu:
+    use_gpu: true
+    num_gpus: 1
+    gpu_id: 0
+
+# Distributed Testing Configuration
+distributed:
+  enabled: false  # Enable if MPI available
+  shard_methods: ["hash", "range", "random"]
+  replication_factors: [1, 2, 3]
+  num_nodes_test: [1, 2, 4, 8]
+
+# GPU Non-determinism Testing
+gpu_factors:
+  test_atomic_operations: true
+  test_parallel_reduction: true
+  test_multi_gpu_sync: true
+  test_mixed_precision: true
+  test_tensor_cores: true
+  batch_sizes: [1, 32, 128, 512]
+
+# Scale Testing Configuration
+scale_tests:
+  document_counts: [100, 1000, 5000, 10000]
+  query_counts: [10, 50, 100]
+  embedding_dimensions: [384, 512, 768]
+
+# Reproducibility Metrics
+metrics:
+  calculate_exact_match: true
+  calculate_overlap: true
+  calculate_rank_correlation: true
+  calculate_score_stability: true
+  calculate_latency_stability: true
+  calculate_embedding_stability: true
+
+  # Thresholds for analysis
+  thresholds:
+    exact_match_acceptable: 0.95
+    jaccard_acceptable: 0.90
+    kendall_tau_acceptable: 0.85
+    l2_distance_warning: 1e-6
+    cosine_similarity_minimum: 0.999
+
+# Visualization Configuration
+visualization:
+  generate_plots: true
+  plot_formats: ["png", "pdf"]
+  plot_dpi: 300
+  color_schemes:
+    precision: ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
+    index_type: ["#9467bd", "#8c564b", "#e377c2", "#7f7f7f"]
+
+# Output Configuration
+output:
+  save_embeddings: false  # Set to true to save embedding matrices
+  save_raw_results: true
+  save_processed_metrics: true
+  generate_markdown_report: true
+  generate_json_summary: true
+  compress_results: false
+
+# Performance Configuration
+performance:
+  max_memory_gb: 16
+  num_threads: 4
+  timeout_minutes: 60
+  progress_reporting_interval: 10  # seconds
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  save_to_file: true
+  log_filename: "reproducibility_test.log"
+  include_timestamps: true
+  include_memory_usage: true
+
+# Experimental Features
+experimental:
+  test_multilingual: false
+  test_domain_transfer: false
+  test_model_ensembles: false
+  test_quantization_effects: false
+  test_hardware_variations: false
