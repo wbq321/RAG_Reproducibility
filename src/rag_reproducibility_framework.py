@@ -970,7 +970,9 @@ class GPUNonDeterminismTester:
             if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
                 precision_configs.extend([
                     EmbeddingConfig(precision="tf32", deterministic=True),
+                    EmbeddingConfig(precision="tf32", deterministic=False),
                     EmbeddingConfig(precision="bf16", deterministic=True),
+                    EmbeddingConfig(precision="bf16", deterministic=False),
                 ])
 
             results = {}

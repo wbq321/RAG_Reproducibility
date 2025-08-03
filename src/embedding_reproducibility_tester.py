@@ -119,8 +119,26 @@ class EmbeddingReproducibilityTester:
 
         return embeddings.astype(np.float32)
 
-    def test_embedding_stability(self, texts: List[str], n_runs: int = 5) -> Dict[str, Any]:
-        """Test embedding stability across multiple runs"""
+    def test_embedding_stability(self, texts: List[str], n_runs: int = 5, use_process_isolation: bool = False) -> Dict[str, Any]:
+        """Test embedding stability across multiple runs
+
+        Args:
+            texts: List of texts to embed
+            n_runs: Number of runs to execute
+            use_process_isolation: If True, run each test in a separate Python process
+        """
+
+        if use_process_isolation:
+            # Use process-isolated testing for maximum reproducibility validation
+            from process_isolated_testing import ProcessIsolatedTester
+
+            isolated_tester = ProcessIsolatedTester()
+            result = isolated_tester.run_embedding_stability_isolated(
+                self.config.to_dict(), texts, n_runs
+            )
+            return result
+
+        # Original in-process testing
         embeddings_runs = []
         timings = []
 
@@ -146,7 +164,8 @@ class EmbeddingReproducibilityTester:
             "config": self.config.to_dict(),
             "metrics": metrics,
             "embeddings": embeddings_runs,
-            "timings": timings
+            "timings": timings,
+            "process_isolation": False
         }
 
     def _calculate_embedding_metrics(self, embeddings_runs: List[np.ndarray]) -> Dict[str, Any]:
@@ -375,8 +394,16 @@ class IntegratedRAGReproducibilityTester:
     def test_end_to_end_reproducibility(self,
                                       documents: List[Dict[str, str]],
                                       queries: List[str],
-                                      n_runs: int = 5) -> Dict[str, Any]:
-        """Test reproducibility from embedding generation through retrieval"""
+                                      n_runs: int = 5,
+                                      use_process_isolation: bool = False) -> Dict[str, Any]:
+        """Test reproducibility from embedding generation through retrieval
+
+        Args:
+            documents: List of documents to index
+            queries: List of queries to search
+            n_runs: Number of runs to execute
+            use_process_isolation: If True, run each test in a separate Python process
+        """
 
         results = {
             "embedding_stability": {},
@@ -389,30 +416,63 @@ class IntegratedRAGReproducibilityTester:
             config_name = f"{emb_config.precision}_{emb_config.deterministic}"
             logger.info(f"Testing embedding configuration: {config_name}")
 
-            # 1. Test embedding stability
-            embedding_tester = EmbeddingReproducibilityTester(emb_config)
+            if use_process_isolation:
+                # Use process-isolated testing
+                from process_isolated_testing import ProcessIsolatedTester
 
-            # Test on document texts
-            doc_texts = [doc['text'] for doc in documents]
-            doc_embedding_results = embedding_tester.test_embedding_stability(doc_texts, n_runs)
+                isolated_tester = ProcessIsolatedTester()
 
-            # Test on query texts
-            query_embedding_results = embedding_tester.test_embedding_stability(queries, n_runs)
+                # 1. Test embedding stability with process isolation
+                doc_texts = [doc['text'] for doc in documents]
 
-            results["embedding_stability"][config_name] = {
-                "documents": doc_embedding_results,
-                "queries": query_embedding_results
-            }
+                doc_embedding_results = isolated_tester.run_embedding_stability_isolated(
+                    emb_config.to_dict(), doc_texts, n_runs
+                )
 
-            # 2. Test retrieval reproducibility with this embedding configuration
-            retrieval_results = self._test_retrieval_with_embeddings(
-                documents, queries, embedding_tester, n_runs
-            )
+                query_embedding_results = isolated_tester.run_embedding_stability_isolated(
+                    emb_config.to_dict(), queries, n_runs
+                )
 
-            results["retrieval_reproducibility"][config_name] = retrieval_results
+                results["embedding_stability"][config_name] = {
+                    "documents": doc_embedding_results,
+                    "queries": query_embedding_results
+                }
+
+                # 2. Test retrieval reproducibility with process isolation
+                retrieval_results = isolated_tester.run_retrieval_stability_isolated(
+                    self.rag_config.to_dict(), emb_config.to_dict(),
+                    documents, queries, n_runs
+                )
+
+                results["retrieval_reproducibility"][config_name] = retrieval_results
+
+            else:
+                # Original in-process testing
+                # 1. Test embedding stability
+                embedding_tester = EmbeddingReproducibilityTester(emb_config)
+
+                # Test on document texts
+                doc_texts = [doc['text'] for doc in documents]
+                doc_embedding_results = embedding_tester.test_embedding_stability(doc_texts, n_runs)
+
+                # Test on query texts
+                query_embedding_results = embedding_tester.test_embedding_stability(queries, n_runs)
+
+                results["embedding_stability"][config_name] = {
+                    "documents": doc_embedding_results,
+                    "queries": query_embedding_results
+                }
+
+                # 2. Test retrieval reproducibility with this embedding configuration
+                retrieval_results = self._test_retrieval_with_embeddings(
+                    documents, queries, embedding_tester, n_runs
+                )
+
+                results["retrieval_reproducibility"][config_name] = retrieval_results
 
         # 3. Cross-configuration analysis
         results["end_to_end_analysis"] = self._analyze_cross_configuration(results)
+        results["process_isolation"] = use_process_isolation
 
         return results
 
@@ -613,10 +673,19 @@ class IntegratedRAGReproducibilityTester:
 def test_integrated_reproducibility(csv_path: str = None,
                                    num_docs: int = 1000,
                                    num_queries: int = 50,
-                                   n_runs: int = 3):
-    """Test function for integrated reproducibility analysis using MS MARCO data"""
+                                   n_runs: int = 3,
+                                   use_process_isolation: bool = False):
+    """Test function for integrated reproducibility analysis using real data
 
-    logger.info("Starting integrated reproducibility test with MS MARCO data")
+    Args:
+        csv_path: Path to CSV dataset file
+        num_docs: Number of documents to use
+        num_queries: Number of queries to generate
+        n_runs: Number of test runs
+        use_process_isolation: If True, run each test in a separate Python process for maximum isolation
+    """
+
+    logger.info("Starting integrated reproducibility test with real data")
 
     # Configure RAG system
     rag_config = ExperimentConfig(
@@ -638,14 +707,16 @@ def test_integrated_reproducibility(csv_path: str = None,
     if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
         embedding_configs.extend([
             EmbeddingConfig(precision="tf32", deterministic=True),
+            EmbeddingConfig(precision="tf32", deterministic=False),
             EmbeddingConfig(precision="bf16", deterministic=True),
+            EmbeddingConfig(precision="bf16", deterministic=False),
         ])
-        logger.info("Added TF32 and BF16 precision tests (Ampere GPU detected)")
+        logger.info("Added TF32 and BF16 precision tests (both deterministic modes) (Ampere GPU detected)")
 
     # Create integrated tester
     tester = IntegratedRAGReproducibilityTester(rag_config, embedding_configs)
 
-    # Load MS MARCO data
+    # Load real data
     documents, queries = tester.load_msmarco_data(csv_path, num_docs, num_queries)
 
     # Print sample data for verification
@@ -654,6 +725,7 @@ def test_integrated_reproducibility(csv_path: str = None,
     logger.info("="*60)
     logger.info(f"Total documents: {len(documents)}")
     logger.info(f"Total queries: {len(queries)}")
+    logger.info(f"Process isolation: {'Enabled' if use_process_isolation else 'Disabled'}")
 
     if documents:
         sample_doc = documents[0]
@@ -669,12 +741,14 @@ def test_integrated_reproducibility(csv_path: str = None,
 
     logger.info("="*60)
 
-    # Run integrated test
+    # Run integrated test with optional process isolation
     logger.info(f"Starting integrated reproducibility analysis with {n_runs} runs...")
-    results = tester.test_end_to_end_reproducibility(documents, queries, n_runs=n_runs)
+    results = tester.test_end_to_end_reproducibility(
+        documents, queries, n_runs=n_runs, use_process_isolation=use_process_isolation
+    )
 
     # Generate report
-    output_dir = "ms_marco_analysis"
+    output_dir = f"ms_marco_analysis_{'isolated' if use_process_isolation else 'inprocess'}"
     tester.generate_comprehensive_report(results, output_dir)
 
     # Print summary
@@ -701,6 +775,7 @@ def test_integrated_reproducibility(csv_path: str = None,
     logger.info("✅ Integrated reproducibility test completed!")
     logger.info(f"📁 Results saved to: {output_dir}/")
     logger.info(f"📊 Report: {output_dir}/integrated_reproducibility_report.md")
+    logger.info(f"🔬 Process isolation: {'Enabled' if use_process_isolation else 'Disabled'}")
     logger.info("="*60)
 
     return results

@@ -260,9 +260,19 @@ def run_gpu_nondeterminism_tests(documents: List[Dict[str, str]],
 
 def run_integrated_tests(documents: List[Dict[str, str]],
                         queries: List[str],
-                        output_dir: str) -> Dict[str, Any]:
-    """Run integrated embedding + retrieval tests"""
+                        output_dir: str,
+                        use_process_isolation: bool = False) -> Dict[str, Any]:
+    """Run integrated embedding + retrieval tests
+
+    Args:
+        documents: List of documents to test
+        queries: List of queries to test
+        output_dir: Output directory for results
+        use_process_isolation: If True, run each test in a separate Python process
+    """
     logger.info("Running integrated embedding and retrieval tests...")
+    if use_process_isolation:
+        logger.info("🔬 Process isolation enabled - each run in separate Python process")
 
     # Configure RAG system
     rag_config = ExperimentConfig(
@@ -287,9 +297,11 @@ def run_integrated_tests(documents: List[Dict[str, str]],
         if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
             embedding_configs.extend([
                 EmbeddingConfig(precision="tf32", deterministic=True),
+                EmbeddingConfig(precision="tf32", deterministic=False),
                 EmbeddingConfig(precision="bf16", deterministic=True),
+                EmbeddingConfig(precision="bf16", deterministic=False),
             ])
-            logger.info("Added TF32 and BF16 precision tests (Ampere GPU detected)")
+            logger.info("Added TF32 and BF16 precision tests (both deterministic modes) (Ampere GPU detected)")
     except:
         pass
 
@@ -298,11 +310,13 @@ def run_integrated_tests(documents: List[Dict[str, str]],
     results = tester.test_end_to_end_reproducibility(
         documents[:2000],  # Reduced dataset for faster execution
         queries[:10],
-        n_runs=3
+        n_runs=3,
+        use_process_isolation=use_process_isolation
     )
 
     # Generate integrated report
-    tester.generate_comprehensive_report(results, f"{output_dir}/integrated_analysis")
+    report_suffix = "_isolated" if use_process_isolation else "_inprocess"
+    tester.generate_comprehensive_report(results, f"{output_dir}/integrated_analysis{report_suffix}")
 
     logger.info("Integrated tests completed")
     return results
@@ -441,6 +455,8 @@ def main():
                        help="Skip comprehensive analysis")
     parser.add_argument("--quick", action="store_true",
                        help="Run quick tests with reduced datasets")
+    parser.add_argument("--process-isolation", action="store_true",
+                       help="Run tests in separate Python processes for maximum isolation (slower but more rigorous)")
 
     args = parser.parse_args()
 
@@ -458,6 +474,7 @@ def main():
     logger.info(f"Starting comprehensive RAG reproducibility testing")
     logger.info(f"Output directory: {output_dir}")
     logger.info(f"Test documents: {n_docs}")
+    logger.info(f"Process isolation: {'Enabled' if args.process_isolation else 'Disabled'}")
 
     # Determine data source
     use_real_data = not args.use_simulated
@@ -489,7 +506,7 @@ def main():
 
         if not args.skip_integrated:
             all_results["integrated"] = run_integrated_tests(
-                documents, queries, output_dir
+                documents, queries, output_dir, use_process_isolation=args.process_isolation
             )
 
         if not args.skip_comprehensive:
