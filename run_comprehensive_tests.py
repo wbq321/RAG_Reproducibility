@@ -34,21 +34,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def create_test_documents(n_docs: int = 5000, use_msmarco: bool = True, csv_path: str = None) -> List[Dict[str, str]]:
-    """Create test documents with MS MARCO data or fallback to simulated data"""
+def create_test_documents(n_docs: int = 5000, use_real_data: bool = True, csv_path: str = None) -> List[Dict[str, str]]:
+    """Create test documents with real dataset or fallback to simulated data"""
 
-    if use_msmarco:
+    if use_real_data:
         try:
-            # Try to load MS MARCO data using generalized loader
+            # Try to load real dataset using generalized loader
             sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))
             from dataset_loader import load_dataset_for_reproducibility
 
             # Try different possible paths
             possible_paths = [
                 csv_path,
-                "data/ms_marco_passages.csv",
-                "data/msmarco.csv",
-                "data/passages.csv"
+                "data/dataset.csv",
             ]
 
             csv_path_found = None
@@ -58,24 +56,24 @@ def create_test_documents(n_docs: int = 5000, use_msmarco: bool = True, csv_path
                     break
 
             if csv_path_found:
-                logger.info(f"Loading MS MARCO data from: {csv_path_found}")
+                logger.info(f"Loading real dataset from: {csv_path_found}")
                 documents, _ = load_dataset_for_reproducibility(
                     file_path=csv_path_found,
-                    dataset_type="ms_marco",
+                    dataset_type="auto",  # Auto-detect dataset type
                     num_docs=n_docs,
                     num_queries=10  # Just need documents here
                 )
-                logger.info(f"Loaded {len(documents)} MS MARCO documents")
+                logger.info(f"Loaded {len(documents)} documents from real dataset")
                 return documents
             else:
-                logger.warning("MS MARCO CSV not found in expected locations:")
+                logger.warning("Real dataset CSV not found in expected locations:")
                 for path in possible_paths:
                     if path:
                         logger.warning(f"  - {path}")
                 logger.warning("Falling back to simulated data")
 
         except Exception as e:
-            logger.error(f"Error loading MS MARCO data: {e}")
+            logger.error(f"Error loading real dataset: {e}")
             logger.warning("Falling back to simulated data")
 
     # Fallback to simulated data (enhanced version)
@@ -172,17 +170,17 @@ def create_simulated_documents(n_docs: int) -> List[Dict[str, str]]:
     return documents
 
 
-def create_test_queries(use_msmarco: bool = True, csv_path: str = None) -> List[str]:
-    """Create test queries from MS MARCO or generate realistic ones"""
+def create_test_queries(use_real_data: bool = True, csv_path: str = None) -> List[str]:
+    """Create test queries from real dataset or generate realistic ones"""
 
-    if use_msmarco:
+    if use_real_data:
         try:
             sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))
             from dataset_loader import load_dataset_for_reproducibility
 
             possible_paths = [
                 csv_path,
-                "data/ms_marco_passages.csv",
+                "data/dataset.csv",
                 "data/msmarco.csv",
                 "data/passages.csv"
             ]
@@ -196,15 +194,15 @@ def create_test_queries(use_msmarco: bool = True, csv_path: str = None) -> List[
             if csv_path_found:
                 _, queries = load_dataset_for_reproducibility(
                     file_path=csv_path_found,
-                    dataset_type="ms_marco",
+                    dataset_type="auto",  # Auto-detect dataset type
                     num_docs=100,  # Small number for query generation
                     num_queries=20
                 )
-                logger.info(f"Generated {len(queries)} queries from MS MARCO data")
+                logger.info(f"Generated {len(queries)} queries from real dataset")
                 return queries
 
         except Exception as e:
-            logger.error(f"Error generating MS MARCO queries: {e}")
+            logger.error(f"Error generating queries from real dataset: {e}")
 
     # Fallback to enhanced simulated queries
     return [
@@ -462,14 +460,14 @@ def main():
     logger.info(f"Test documents: {n_docs}")
 
     # Determine data source
-    use_msmarco = not args.use_simulated
+    use_real_data = not args.use_simulated
     if args.dataset:
         logger.info(f"Dataset CSV specified: {args.dataset}")
 
     # Create test data
     logger.info("Creating test documents and queries...")
-    documents = create_test_documents(n_docs, use_msmarco=use_msmarco, csv_path=args.dataset)
-    queries = create_test_queries(use_msmarco=use_msmarco, csv_path=args.dataset)
+    documents = create_test_documents(n_docs, use_real_data=use_real_data, csv_path=args.dataset)
+    queries = create_test_queries(use_real_data=use_real_data, csv_path=args.dataset)
 
     # Log data source information
     if documents and "source" in documents[0].get("metadata", {}):
@@ -504,7 +502,7 @@ def main():
         logger.info("🎉 All reproducibility tests completed successfully!")
         logger.info(f"📁 Results saved to: {output_dir}/")
         logger.info(f"📊 Executive summary: {output_dir}/executive_summary.md")
-        if use_msmarco and documents and documents[0].get("metadata", {}).get("source") not in ["simulated_realistic", "simulated"]:
+        if use_real_data and documents and documents[0].get("metadata", {}).get("source") not in ["simulated_realistic", "simulated"]:
             data_source = documents[0]["metadata"].get("source", "real dataset")
             logger.info(f"✅ Tests completed using real dataset: {data_source}")
         else:
