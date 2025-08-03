@@ -13,6 +13,7 @@ import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass, field
 import logging
+from datetime import datetime
 from sentence_transformers import SentenceTransformer
 
 # Add scripts directory to path for dataset loader
@@ -713,7 +714,7 @@ class IntegratedRAGReproducibilityTester:
                 else:
                     # Process isolation result structure - metrics might be at top level
                     metrics = data
-                
+
                 exact_match = metrics.get("exact_match", {}).get("exact_match_rate", 0)
                 jaccard = metrics.get("overlap", {}).get("mean_jaccard", 0)
                 kendall = metrics.get("rank_correlation", {}).get("mean_kendall_tau", 0)
@@ -857,7 +858,7 @@ def test_integrated_reproducibility(csv_path: str = None,
         else:
             # In-process result structure
             doc_metrics = data["documents"]["metrics"]
-        
+
         # Handle both process isolation and in-process result structures for retrieval
         ret_data = results["retrieval_reproducibility"][config_name]
         if "retrieval_metrics" in ret_data:
@@ -953,6 +954,233 @@ def test_with_custom_msmarco(csv_path: str):
         num_queries=100,
         n_runs=3
     )
+
+
+class PrecisionComparisonAnalyzer:
+    """Analyze embedding differences across different precision settings"""
+
+    def __init__(self, model_path: str, device: str = "cuda"):
+        self.model_path = model_path
+        self.device = device
+
+    def run_precision_comparison_analysis(self, texts: List[str], output_dir: str = "precision_analysis") -> Dict[str, Any]:
+        """Run comprehensive precision comparison analysis integrated with existing framework"""
+
+        from pathlib import Path
+        output_path = Path(output_dir)
+        output_path.mkdir(exist_ok=True)
+
+        logger.info(f"Starting precision comparison analysis with {len(texts)} texts")
+
+        # Define precision configurations to test
+        precision_configs = [
+            EmbeddingConfig(precision="fp32", deterministic=True, model_name=self.model_path),
+            EmbeddingConfig(precision="fp16", deterministic=True, model_name=self.model_path),
+        ]
+
+        # Add advanced precisions if supported
+        if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
+            precision_configs.extend([
+                EmbeddingConfig(precision="bf16", deterministic=True, model_name=self.model_path),
+                EmbeddingConfig(precision="tf32", deterministic=True, model_name=self.model_path),
+            ])
+
+        # Generate embeddings for each precision
+        embeddings_dict = {}
+        for config in precision_configs:
+            try:
+                logger.info(f"Generating embeddings with {config.precision} precision...")
+                tester = EmbeddingReproducibilityTester(config)
+                embeddings = tester.encode_texts(texts)
+                embeddings_dict[config.precision] = embeddings
+                logger.info(f"✅ {config.precision}: Shape {embeddings.shape}")
+            except Exception as e:
+                logger.error(f"❌ Failed to generate {config.precision} embeddings: {e}")
+                continue
+
+        if len(embeddings_dict) < 2:
+            raise ValueError("Need at least 2 successful precision configurations for comparison")
+
+        # Calculate pairwise differences using existing framework methods
+        results = {
+            "metadata": {
+                "timestamp": datetime.now().isoformat(),
+                "model_path": self.model_path,
+                "num_texts": len(texts),
+                "device": self.device,
+                "precision_configs": list(embeddings_dict.keys())
+            },
+            "pairwise_comparisons": {},
+            "summary": {}
+        }
+
+        # Pairwise comparisons
+        precision_names = list(embeddings_dict.keys())
+        for i, prec1 in enumerate(precision_names):
+            for j, prec2 in enumerate(precision_names):
+                if i < j:  # Avoid duplicates
+                    comparison_key = f"{prec1}_vs_{prec2}"
+                    logger.info(f"Comparing {prec1} vs {prec2}...")
+
+                    # Use existing stability analysis method
+                    diff_results = self._calculate_embedding_differences(
+                        embeddings_dict[prec1],
+                        embeddings_dict[prec2],
+                        prec1,
+                        prec2
+                    )
+
+                    results["pairwise_comparisons"][comparison_key] = diff_results
+
+        # Generate summary
+        results["summary"] = self._generate_comparison_summary(results["pairwise_comparisons"])
+
+        # Save results
+        results_file = output_path / "precision_comparison_results.json"
+        with open(results_file, 'w') as f:
+            json.dump(results, f, indent=2)
+
+        logger.info(f"Results saved to {results_file}")
+
+        # Generate report
+        self._generate_comparison_report(results, output_path)
+
+        return results
+
+    def _calculate_embedding_differences(self, embeddings1: np.ndarray, embeddings2: np.ndarray,
+                                       config1: str, config2: str) -> Dict[str, Any]:
+        """Calculate comprehensive differences between two embedding sets"""
+
+        # Reuse existing stability analysis methods but with pairwise comparison
+        # L2 (Euclidean) distance
+        l2_distances = np.linalg.norm(embeddings1 - embeddings2, axis=1)
+
+        # Cosine similarity
+        cosine_similarities = []
+        for i in range(len(embeddings1)):
+            cos_sim = np.dot(embeddings1[i], embeddings2[i]) / (
+                np.linalg.norm(embeddings1[i]) * np.linalg.norm(embeddings2[i])
+            )
+            cosine_similarities.append(cos_sim)
+        cosine_similarities = np.array(cosine_similarities)
+
+        # Element-wise absolute differences
+        abs_differences = np.abs(embeddings1 - embeddings2)
+
+        return {
+            "comparison": f"{config1} vs {config2}",
+            "num_embeddings": len(embeddings1),
+            "embedding_dim": embeddings1.shape[1],
+
+            # L2 distance statistics
+            "l2_distance": {
+                "mean": float(np.mean(l2_distances)),
+                "std": float(np.std(l2_distances)),
+                "min": float(np.min(l2_distances)),
+                "max": float(np.max(l2_distances)),
+                "median": float(np.median(l2_distances)),
+                "percentile_95": float(np.percentile(l2_distances, 95)),
+                "percentile_99": float(np.percentile(l2_distances, 99))
+            },
+
+            # Cosine similarity statistics
+            "cosine_similarity": {
+                "mean": float(np.mean(cosine_similarities)),
+                "std": float(np.std(cosine_similarities)),
+                "min": float(np.min(cosine_similarities)),
+                "max": float(np.max(cosine_similarities)),
+                "median": float(np.median(cosine_similarities))
+            },
+
+            # Element-wise difference statistics
+            "element_wise_diff": {
+                "mean_abs_diff": float(np.mean(abs_differences)),
+                "max_abs_diff": float(np.max(abs_differences)),
+                "std_abs_diff": float(np.std(abs_differences)),
+                "fraction_zero_diff": float(np.mean(abs_differences == 0)),
+                "fraction_small_diff": float(np.mean(abs_differences < 1e-6))
+            }
+        }
+
+    def _generate_comparison_summary(self, comparisons: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate summary statistics across all comparisons"""
+        if not comparisons:
+            return {}
+
+        l2_means = [comp["l2_distance"]["mean"] for comp in comparisons.values()]
+        cosine_means = [comp["cosine_similarity"]["mean"] for comp in comparisons.values()]
+
+        # Find most/least similar pairs
+        best_cosine_pair = max(comparisons.items(), key=lambda x: x[1]["cosine_similarity"]["mean"])
+        worst_cosine_pair = min(comparisons.items(), key=lambda x: x[1]["cosine_similarity"]["mean"])
+
+        return {
+            "most_similar_pair": best_cosine_pair[0],
+            "least_similar_pair": worst_cosine_pair[0],
+            "l2_distance_stats": {
+                "mean": float(np.mean(l2_means)),
+                "std": float(np.std(l2_means)),
+                "min": float(np.min(l2_means)),
+                "max": float(np.max(l2_means))
+            },
+            "cosine_similarity_stats": {
+                "mean": float(np.mean(cosine_means)),
+                "std": float(np.std(cosine_means)),
+                "min": float(np.min(cosine_means)),
+                "max": float(np.max(cosine_means))
+            }
+        }
+
+    def _generate_comparison_report(self, results: Dict[str, Any], output_path):
+        """Generate a comprehensive precision comparison report"""
+
+        report_file = output_path / "precision_comparison_report.md"
+
+        with open(report_file, 'w') as f:
+            f.write("# 🔬 Embedding Precision Comparison Analysis\n\n")
+            f.write(f"**Generated**: {results['metadata']['timestamp']}\n")
+            f.write(f"**Model**: {results['metadata']['model_path']}\n")
+            f.write(f"**Device**: {results['metadata']['device']}\n")
+            f.write(f"**Number of texts**: {results['metadata']['num_texts']}\n\n")
+
+            f.write("## 📊 Precision Configurations Tested\n\n")
+            for prec in results['metadata']['precision_configs']:
+                f.write(f"- **{prec.upper()}**\n")
+            f.write("\n")
+
+            if results['summary']:
+                f.write("## 🔍 Summary Results\n\n")
+                summary = results['summary']
+                f.write(f"- **Most similar precision pair**: {summary.get('most_similar_pair', 'N/A')}\n")
+                f.write(f"- **Least similar precision pair**: {summary.get('least_similar_pair', 'N/A')}\n")
+                f.write(f"- **Average L2 distance**: {summary.get('l2_distance_stats', {}).get('mean', 0):.2e}\n")
+                f.write(f"- **Average cosine similarity**: {summary.get('cosine_similarity_stats', {}).get('mean', 0):.6f}\n\n")
+
+            f.write("## 📈 Detailed Pairwise Comparisons\n\n")
+
+            for comp_name, comp_data in results['pairwise_comparisons'].items():
+                f.write(f"### {comp_name.replace('_', ' ').upper()}\n\n")
+
+                f.write(f"**L2 Distance:**\n")
+                l2_stats = comp_data['l2_distance']
+                f.write(f"- Mean: {l2_stats['mean']:.2e}\n")
+                f.write(f"- Std: {l2_stats['std']:.2e}\n")
+                f.write(f"- 95th percentile: {l2_stats['percentile_95']:.2e}\n\n")
+
+                f.write(f"**Cosine Similarity:**\n")
+                cos_stats = comp_data['cosine_similarity']
+                f.write(f"- Mean: {cos_stats['mean']:.6f}\n")
+                f.write(f"- Min: {cos_stats['min']:.6f}\n\n")
+
+                f.write(f"**Element-wise Differences:**\n")
+                elem_stats = comp_data['element_wise_diff']
+                f.write(f"- Mean absolute difference: {elem_stats['mean_abs_diff']:.2e}\n")
+                f.write(f"- Max absolute difference: {elem_stats['max_abs_diff']:.2e}\n")
+                f.write(f"- Fraction of small differences (<1e-6): {elem_stats['fraction_small_diff']:.4f}\n\n")
+
+                f.write("---\n\n")
+
+        logger.info(f"📄 Precision comparison report saved to {report_file}")
 
 
 if __name__ == "__main__":

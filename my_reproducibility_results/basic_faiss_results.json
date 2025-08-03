@@ -1,0 +1,272 @@
+{
+  "Flat_det_True": {
+    "config": {
+      "device": "cuda",
+      "gpu_id": 0,
+      "num_gpus": 1,
+      "retrieval_method": "dense",
+      "index_type": "Flat",
+      "embedding_model": "/scratch/user/u.bw269205/shared_models/bge_model",
+      "embedding_dim": 768,
+      "faiss_metric": "L2",
+      "ivf_nlist": 100,
+      "ivf_nprobe": 10,
+      "hnsw_M": 32,
+      "hnsw_ef_construction": 200,
+      "hnsw_ef_search": 50,
+      "use_gpu": true,
+      "chunk_size": 512,
+      "chunk_overlap": 50,
+      "batch_size": 32,
+      "top_k": 10,
+      "search_params": {},
+      "num_threads": 1,
+      "seed": 42,
+      "deterministic_mode": true,
+      "distributed": false,
+      "shard_method": "hash",
+      "replication_factor": 1
+    },
+    "metrics": {
+      "exact_match": {
+        "exact_match_rate": 1.0
+      },
+      "overlap": {
+        "mean_jaccard": 1.0,
+        "std_jaccard": 0.0,
+        "min_jaccard": 1.0
+      },
+      "rank_correlation": {
+        "mean_kendall_tau": 0.9999999999999998,
+        "std_kendall_tau": 1.1102230246251565e-16
+      },
+      "score_stability": {
+        "mean_score_variance": 0.0,
+        "max_score_variance": 0.0,
+        "mean_relative_diff": 0.0
+      },
+      "latency": {
+        "mean_latency_ms": 1.0582866668701172,
+        "std_latency_ms": 0.19252257565902747,
+        "cv_latency": 0.1819191167062635
+      },
+      "distributed_consistency": {}
+    }
+  },
+  "Flat_det_False": {
+    "config": {
+      "device": "cuda",
+      "gpu_id": 0,
+      "num_gpus": 1,
+      "retrieval_method": "dense",
+      "index_type": "Flat",
+      "embedding_model": "/scratch/user/u.bw269205/shared_models/bge_model",
+      "embedding_dim": 768,
+      "faiss_metric": "L2",
+      "ivf_nlist": 100,
+      "ivf_nprobe": 10,
+      "hnsw_M": 32,
+      "hnsw_ef_construction": 200,
+      "hnsw_ef_search": 50,
+      "use_gpu": true,
+      "chunk_size": 512,
+      "chunk_overlap": 50,
+      "batch_size": 32,
+      "top_k": 10,
+      "search_params": {},
+      "num_threads": 1,
+      "seed": null,
+      "deterministic_mode": false,
+      "distributed": false,
+      "shard_method": "hash",
+      "replication_factor": 1
+    },
+    "metrics": {
+      "exact_match": {
+        "exact_match_rate": 1.0
+      },
+      "overlap": {
+        "mean_jaccard": 1.0,
+        "std_jaccard": 0.0,
+        "min_jaccard": 1.0
+      },
+      "rank_correlation": {
+        "mean_kendall_tau": 0.9999999999999998,
+        "std_kendall_tau": 1.1102230246251565e-16
+      },
+      "score_stability": {
+        "mean_score_variance": 0.0,
+        "max_score_variance": 0.0,
+        "mean_relative_diff": 0.0
+      },
+      "latency": {
+        "mean_latency_ms": 1.060002326965332,
+        "std_latency_ms": 0.19296760790867723,
+        "cv_latency": 0.18204451348811834
+      },
+      "distributed_consistency": {}
+    }
+  },
+  "IVF_det_True": {
+    "config": {
+      "device": "cuda",
+      "gpu_id": 0,
+      "num_gpus": 1,
+      "retrieval_method": "dense",
+      "index_type": "IVF",
+      "embedding_model": "/scratch/user/u.bw269205/shared_models/bge_model",
+      "embedding_dim": 768,
+      "faiss_metric": "L2",
+      "ivf_nlist": 100,
+      "ivf_nprobe": 10,
+      "hnsw_M": 32,
+      "hnsw_ef_construction": 200,
+      "hnsw_ef_search": 50,
+      "use_gpu": true,
+      "chunk_size": 512,
+      "chunk_overlap": 50,
+      "batch_size": 32,
+      "top_k": 10,
+      "search_params": {},
+      "num_threads": 1,
+      "seed": 42,
+      "deterministic_mode": true,
+      "distributed": false,
+      "shard_method": "hash",
+      "replication_factor": 1
+    },
+    "metrics": {
+      "exact_match": {
+        "exact_match_rate": 1.0
+      },
+      "overlap": {
+        "mean_jaccard": 1.0,
+        "std_jaccard": 0.0,
+        "min_jaccard": 1.0
+      },
+      "rank_correlation": {
+        "mean_kendall_tau": 0.9999999999999998,
+        "std_kendall_tau": 1.1102230246251565e-16
+      },
+      "score_stability": {
+        "mean_score_variance": 0.0,
+        "max_score_variance": 0.0,
+        "mean_relative_diff": 0.0
+      },
+      "latency": {
+        "mean_latency_ms": 0.16916847229003906,
+        "std_latency_ms": 0.035284106799276696,
+        "cv_latency": 0.20857377454341583
+      },
+      "distributed_consistency": {}
+    }
+  },
+  "HNSW_det_True": {
+    "config": {
+      "device": "cuda",
+      "gpu_id": 0,
+      "num_gpus": 1,
+      "retrieval_method": "dense",
+      "index_type": "HNSW",
+      "embedding_model": "/scratch/user/u.bw269205/shared_models/bge_model",
+      "embedding_dim": 768,
+      "faiss_metric": "L2",
+      "ivf_nlist": 100,
+      "ivf_nprobe": 10,
+      "hnsw_M": 16,
+      "hnsw_ef_construction": 200,
+      "hnsw_ef_search": 50,
+      "use_gpu": true,
+      "chunk_size": 512,
+      "chunk_overlap": 50,
+      "batch_size": 32,
+      "top_k": 10,
+      "search_params": {},
+      "num_threads": 1,
+      "seed": 42,
+      "deterministic_mode": true,
+      "distributed": false,
+      "shard_method": "hash",
+      "replication_factor": 1
+    },
+    "metrics": {
+      "exact_match": {
+        "exact_match_rate": 1.0
+      },
+      "overlap": {
+        "mean_jaccard": 1.0,
+        "std_jaccard": 0.0,
+        "min_jaccard": 1.0
+      },
+      "rank_correlation": {
+        "mean_kendall_tau": 0.9999999999999998,
+        "std_kendall_tau": 1.1102230246251565e-16
+      },
+      "score_stability": {
+        "mean_score_variance": 0.0,
+        "max_score_variance": 0.0,
+        "mean_relative_diff": 0.0
+      },
+      "latency": {
+        "mean_latency_ms": 0.09886741638183594,
+        "std_latency_ms": 0.014691587314387583,
+        "cv_latency": 0.14859887971227234
+      },
+      "distributed_consistency": {}
+    }
+  },
+  "LSH_det_True": {
+    "config": {
+      "device": "cuda",
+      "gpu_id": 0,
+      "num_gpus": 1,
+      "retrieval_method": "dense",
+      "index_type": "LSH",
+      "embedding_model": "/scratch/user/u.bw269205/shared_models/bge_model",
+      "embedding_dim": 768,
+      "faiss_metric": "L2",
+      "ivf_nlist": 100,
+      "ivf_nprobe": 10,
+      "hnsw_M": 32,
+      "hnsw_ef_construction": 200,
+      "hnsw_ef_search": 50,
+      "use_gpu": true,
+      "chunk_size": 512,
+      "chunk_overlap": 50,
+      "batch_size": 32,
+      "top_k": 10,
+      "search_params": {},
+      "num_threads": 1,
+      "seed": 42,
+      "deterministic_mode": true,
+      "distributed": false,
+      "shard_method": "hash",
+      "replication_factor": 1
+    },
+    "metrics": {
+      "exact_match": {
+        "exact_match_rate": 1.0
+      },
+      "overlap": {
+        "mean_jaccard": 1.0,
+        "std_jaccard": 0.0,
+        "min_jaccard": 1.0
+      },
+      "rank_correlation": {
+        "mean_kendall_tau": 0.9999999999999998,
+        "std_kendall_tau": 1.1102230246251565e-16
+      },
+      "score_stability": {
+        "mean_score_variance": 0.0,
+        "max_score_variance": 0.0,
+        "mean_relative_diff": 0.0
+      },
+      "latency": {
+        "mean_latency_ms": 1.1250123977661133,
+        "std_latency_ms": 0.16180732425324004,
+        "cv_latency": 0.14382714766035787
+      },
+      "distributed_consistency": {}
+    }
+  }
+}

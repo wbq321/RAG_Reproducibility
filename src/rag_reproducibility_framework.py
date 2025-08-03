@@ -1057,55 +1057,131 @@ class GPUNonDeterminismTester:
             return results
 
     def _test_tensor_cores(self, documents: List[Dict[str, str]], queries: List[str]) -> Dict[str, Any]:
-        """Test tensor core usage effects"""
+        """Test tensor core usage effects on reproducibility using actual neural network inference"""
 
-        # This is hardware-specific and would require CUDA-level control
-        # For now, we'll test with configurations that might trigger tensor core usage
+        # Only test on CUDA with tensor core capability
+        if not torch.cuda.is_available():
+            logger.warning("CUDA not available, skipping tensor core tests")
+            return {}
 
-        embedding_dims = [384, 512, 768]  # Different dimensions that may/may not use tensor cores
+        device_capability = torch.cuda.get_device_capability()
+        if device_capability[0] < 7:  # Tensor cores available from Volta (compute capability 7.0+)
+            logger.warning(f"GPU compute capability {device_capability} doesn't support tensor cores, skipping")
+            return {}
+
+        logger.info(f"Testing tensor core effects on GPU with compute capability {device_capability}")
+
+        # Test configurations: tensor cores enabled vs disabled
+        tensor_core_configs = [
+            {"enabled": True, "name": "tensor_cores_enabled"},
+            {"enabled": False, "name": "tensor_cores_disabled"}
+        ]
+
         results = {}
+        subset_docs = documents[:500]  # Use subset for computational efficiency
+        subset_queries = queries[:20]
 
-        for dim in embedding_dims:
-            config = ExperimentConfig(
-                use_gpu=True,
-                embedding_dim=dim,
-                embedding_model="/scratch/user/u.bw269205/shared_models/bge_model"  # Will be overridden
-            )
+        for tc_config in tensor_core_configs:
+            logger.info(f"Testing with tensor cores {tc_config['name']}")
+
+            # Configure tensor core usage
+            if tc_config["enabled"]:
+                # Enable tensor cores for mixed precision
+                torch.backends.cuda.matmul.allow_tf32 = True
+                torch.backends.cudnn.allow_tf32 = True
+                torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+                torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = True
+            else:
+                # Disable tensor cores
+                torch.backends.cuda.matmul.allow_tf32 = False
+                torch.backends.cudnn.allow_tf32 = False
+                torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+                torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = False
 
             runs = []
-            for _ in range(3):  # Fewer runs due to computational cost
+            for run_idx in range(3):  # Multiple runs to test reproducibility
+                logger.info(f"  Run {run_idx + 1}/3")
+
+                # Create fresh model instance for each run to avoid state carryover
+                model = SentenceTransformer(self.embedding_model, device='cuda')
+
+                # Use FP16 precision to trigger tensor core usage when enabled
+                model = model.half()
+
+                # Encode documents with current tensor core setting
+                with torch.no_grad():
+                    with torch.cuda.amp.autocast():
+                        doc_embeddings = model.encode(
+                            [doc['content'] for doc in subset_docs],
+                            batch_size=32,
+                            normalize_embeddings=True,
+                            convert_to_numpy=True,
+                            show_progress_bar=False
+                        )
+
+                # Create FAISS index
+                config = ExperimentConfig(
+                    use_gpu=True,
+                    embedding_dim=doc_embeddings.shape[1],
+                    embedding_model=self.embedding_model,
+                    index_type="Flat",
+                    deterministic=True
+                )
+
                 retrieval = FaissRetrieval(config)
-
-                # Override embedding dimension by using random embeddings
-                retrieval.encoder = None  # Disable encoder
-                retrieval.config.embedding_dim = dim  # Update config dimension
-                retrieval.doc_embeddings = np.random.randn(len(documents[:1000]), dim).astype('float32')
-                retrieval.documents = documents[:1000]
-
-                # Create index directly with correct dimension
+                retrieval.doc_embeddings = doc_embeddings.astype('float32')
+                retrieval.documents = subset_docs
                 retrieval.index = retrieval._create_index()
                 retrieval.index.add(retrieval.doc_embeddings)
 
-                # Search with random query embeddings
-                query_embeddings = np.random.randn(len(queries[:10]), dim).astype('float32')
+                # Encode queries and perform retrieval
+                with torch.no_grad():
+                    with torch.cuda.amp.autocast():
+                        query_embeddings = model.encode(
+                            subset_queries,
+                            batch_size=16,
+                            normalize_embeddings=True,
+                            convert_to_numpy=True,
+                            show_progress_bar=False
+                        )
 
                 results_run = []
-                for i, q_emb in enumerate(query_embeddings):
+                for i, (query, q_emb) in enumerate(zip(subset_queries, query_embeddings)):
+                    start_time = time.time()
                     D, I = retrieval.index.search(q_emb.reshape(1, -1), config.top_k)
+                    latency = (time.time() - start_time) * 1000
+
                     result = RetrievalResult(
                         query_id=f"q_{i}",
                         doc_ids=[retrieval.documents[idx]['id'] for idx in I[0]],
                         scores=D[0].tolist(),
-                        latency_ms=0,
-                        metadata={"embedding_dim": dim}
+                        latency_ms=latency,
+                        metadata={
+                            "tensor_cores_enabled": tc_config["enabled"],
+                            "precision": "fp16",
+                            "model_type": "local_bge"
+                        }
                     )
                     results_run.append(result)
 
                 runs.append(results_run)
                 retrieval.reset()
 
+                # Clean up model to free GPU memory
+                del model
+                torch.cuda.empty_cache()
+
+            # Calculate metrics for this tensor core configuration
             metrics = ReproducibilityMetrics.calculate_all_metrics(runs)
-            results[f"dim_{dim}"] = metrics
+            results[tc_config["name"]] = metrics
+
+            logger.info(f"  {tc_config['name']}: Jaccard={metrics.get('jaccard_similarity', 'N/A'):.4f}")
+
+        # Restore default tensor core settings
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+
+        return results
 
         return results
 
