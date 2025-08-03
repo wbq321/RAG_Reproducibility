@@ -63,8 +63,8 @@ class ExperimentConfig:
     # Algorithm config
     retrieval_method: str = "dense"
     index_type: str = "Flat"  # Flat, IVF, HNSW, LSH
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    embedding_dim: int = 384
+    embedding_model: str = "/scratch/user/u.bw269205/shared_models/bge_model"
+    embedding_dim: int = 768  # BGE models typically use 768 dimensions
 
     # FAISS specific parameters
     faiss_metric: str = "L2"  # L2, IP (inner product)
@@ -104,6 +104,17 @@ class FaissRetrieval:
     def __init__(self, config: ExperimentConfig):
         self.config = config
         self.encoder = SentenceTransformer(config.embedding_model)
+
+        # Auto-detect embedding dimension from the model
+        try:
+            sample_embedding = self.encoder.encode(["test"], convert_to_numpy=True)
+            actual_dim = sample_embedding.shape[1]
+            if actual_dim != config.embedding_dim:
+                logger.info(f"Auto-detected embedding dimension: {actual_dim} (config had {config.embedding_dim})")
+                self.config.embedding_dim = actual_dim
+        except Exception as e:
+            logger.warning(f"Could not auto-detect embedding dimension: {e}")
+
         self.index = None
         self.documents = []
         self.doc_embeddings = None
@@ -1055,7 +1066,7 @@ class GPUNonDeterminismTester:
             config = ExperimentConfig(
                 use_gpu=True,
                 embedding_dim=dim,
-                embedding_model="sentence-transformers/all-MiniLM-L6-v2"  # Will be overridden
+                embedding_model="/scratch/user/u.bw269205/shared_models/bge_model"  # Will be overridden
             )
 
             runs = []
