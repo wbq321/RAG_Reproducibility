@@ -206,12 +206,12 @@ def run_embedding_test(config_file: str, texts_file: str, run_idx: int) -> Dict[
     del tester.model
     torch.cuda.empty_cache() if torch.cuda.is_available() else None
 
-    return {
+    return {{
         "embeddings": embeddings.tolist(),
         "timing": duration,
         "run_idx": run_idx,
         "process_id": os.getpid()
-    }
+    }}
 
 if __name__ == "__main__":
     config_file = sys.argv[1]
@@ -226,11 +226,11 @@ if __name__ == "__main__":
             json.dump(result, f, default=str)
 
     except Exception as e:
-        error_result = {
+        error_result = {{
             "error": str(e),
             "run_idx": run_idx,
             "process_id": os.getpid()
-        }
+        }}
 
         with open(output_file, 'w') as f:
             json.dump(error_result, f)
@@ -310,20 +310,20 @@ def run_retrieval_test(rag_config_file: str, embedding_config_file: str,
     # Convert results to serializable format
     serializable_results = []
     for result in results:
-        serializable_results.append({
+        serializable_results.append({{
             "query_id": result.query_id,
             "doc_ids": result.doc_ids,
             "scores": result.scores,
             "latency_ms": result.latency_ms,
             "metadata": result.metadata
-        })
+        }})
 
-    return {
+    return {{
         "retrieval_results": serializable_results,
         "timing": duration,
         "run_idx": run_idx,
         "process_id": os.getpid()
-    }
+    }}
 
 if __name__ == "__main__":
     rag_config_file = sys.argv[1]
@@ -341,11 +341,11 @@ if __name__ == "__main__":
             json.dump(result, f, default=str)
 
     except Exception as e:
-        error_result = {
+        error_result = {{
             "error": str(e),
             "run_idx": run_idx,
             "process_id": os.getpid()
-        }
+        }}
 
         with open(output_file, 'w') as f:
             json.dump(error_result, f)
