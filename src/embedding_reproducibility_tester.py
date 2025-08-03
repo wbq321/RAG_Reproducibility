@@ -73,8 +73,11 @@ class EmbeddingReproducibilityTester:
                 torch.backends.cuda.matmul.allow_tf32 = True
                 torch.backends.cudnn.allow_tf32 = True
         elif self.config.precision == "bf16":
-            # BF16 requires specific setup
-            pass
+            # BF16 setup for both CPU and GPU
+            if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
+                # Ampere+ GPU: Enable tensor core BF16
+                torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = True
+            # Note: CPU BF16 support depends on hardware (Intel Ice Lake+, some ARM CPUs)
 
     def _load_model(self):
         """Load sentence transformer model"""
@@ -84,8 +87,14 @@ class EmbeddingReproducibilityTester:
             # Apply precision settings
             if self.config.precision == "fp16":
                 self.model = self.model.half()
-            elif self.config.precision == "bf16" and torch.cuda.is_available():
-                self.model = self.model.to(torch.bfloat16)
+            elif self.config.precision == "bf16":
+                # BF16 is supported on both modern CPUs and GPUs
+                try:
+                    self.model = self.model.to(torch.bfloat16)
+                    logger.info(f"BF16 precision enabled on {self.device}")
+                except Exception as e:
+                    logger.warning(f"BF16 not supported on {self.device}, falling back to FP32: {e}")
+                    # Keep model in default precision
 
     def encode_texts(self, texts: List[str]) -> np.ndarray:
         """Encode texts with current configuration"""
