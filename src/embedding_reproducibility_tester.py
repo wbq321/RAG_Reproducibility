@@ -79,7 +79,7 @@ class EmbeddingReproducibilityTester:
         self._setup_environment()
 
     def _setup_environment(self):
-        """Setup deterministic environment if requested"""
+        """Setup deterministic or non-deterministic environment"""
         if self.config.deterministic:
             torch.manual_seed(42)
             np.random.seed(42)
@@ -87,6 +87,11 @@ class EmbeddingReproducibilityTester:
                 torch.cuda.manual_seed_all(42)
                 torch.backends.cudnn.deterministic = True
                 torch.backends.cudnn.benchmark = False
+        else:
+            # Non-deterministic mode for faster performance
+            if torch.cuda.is_available():
+                torch.backends.cudnn.deterministic = False
+                torch.backends.cudnn.benchmark = True
 
         # Setup precision
         if self.config.precision == "fp16":
@@ -964,7 +969,7 @@ class PrecisionComparisonAnalyzer:
         self.device = device
 
     def run_precision_comparison_analysis(self, texts: List[str], output_dir: str = "precision_analysis") -> Dict[str, Any]:
-        """Run comprehensive precision comparison analysis integrated with existing framework"""
+        """Run comprehensive precision comparison analysis with deterministic/non-deterministic modes"""
 
         from pathlib import Path
         output_path = Path(output_dir)
@@ -972,27 +977,34 @@ class PrecisionComparisonAnalyzer:
 
         logger.info(f"Starting precision comparison analysis with {len(texts)} texts")
 
-        # Define precision configurations to test
-        precision_configs = [
-            EmbeddingConfig(precision="fp32", deterministic=True, model_name=self.model_path),
-            EmbeddingConfig(precision="fp16", deterministic=True, model_name=self.model_path),
-        ]
+        # Define all 8 precision configurations (4 precisions x 2 deterministic modes)
+        base_precisions = ["fp32", "fp16"]
 
         # Add advanced precisions if supported
         if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
+            base_precisions.extend(["bf16", "tf32"])
+
+        precision_configs = []
+        for precision in base_precisions:
+            # Add both deterministic and non-deterministic versions
             precision_configs.extend([
-                EmbeddingConfig(precision="bf16", deterministic=True, model_name=self.model_path),
-                EmbeddingConfig(precision="tf32", deterministic=True, model_name=self.model_path),
+                EmbeddingConfig(precision=precision, deterministic=True, model_name=self.model_path),
+                EmbeddingConfig(precision=precision, deterministic=False, model_name=self.model_path),
             ])
 
-        # Generate embeddings for each precision
+        # Generate embeddings for each configuration
         embeddings_dict = {}
         for config in precision_configs:
             try:
-                logger.info(f"Generating embeddings with {config.precision} precision...")
+                config_name = f"{config.precision}_{'deterministic' if config.deterministic else 'nondeterministic'}"
+                logger.info(f"Generating embeddings with {config_name}...")
                 tester = EmbeddingReproducibilityTester(config)
                 embeddings = tester.encode_texts(texts)
-                embeddings_dict[config.precision] = embeddings
+                embeddings_dict[config_name] = embeddings
+                logger.info(f"✅ {config_name}: Shape {embeddings.shape}")
+            except Exception as e:
+                logger.error(f"❌ Failed to generate {config_name} embeddings: {e}")
+                continue
                 logger.info(f"✅ {config.precision}: Shape {embeddings.shape}")
             except Exception as e:
                 logger.error(f"❌ Failed to generate {config.precision} embeddings: {e}")
@@ -1001,7 +1013,7 @@ class PrecisionComparisonAnalyzer:
         if len(embeddings_dict) < 2:
             raise ValueError("Need at least 2 successful precision configurations for comparison")
 
-        # Calculate pairwise differences using existing framework methods
+        # Calculate pairwise differences organized into 3 groups
         results = {
             "metadata": {
                 "timestamp": datetime.now().isoformat(),
@@ -1010,27 +1022,80 @@ class PrecisionComparisonAnalyzer:
                 "device": self.device,
                 "precision_configs": list(embeddings_dict.keys())
             },
+            "grouped_comparisons": {
+                "deterministic_cross_precision": {},
+                "nondeterministic_cross_precision": {},
+                "within_precision_det_vs_nondet": {}
+            },
             "pairwise_comparisons": {},
             "summary": {}
         }
 
-        # Pairwise comparisons
+        # Organize configurations by precision and deterministic mode
         precision_names = list(embeddings_dict.keys())
-        for i, prec1 in enumerate(precision_names):
-            for j, prec2 in enumerate(precision_names):
-                if i < j:  # Avoid duplicates
-                    comparison_key = f"{prec1}_vs_{prec2}"
-                    logger.info(f"Comparing {prec1} vs {prec2}...")
+        det_configs = [name for name in precision_names if 'deterministic' in name and 'nondeterministic' not in name]
+        nondet_configs = [name for name in precision_names if 'nondeterministic' in name]
 
-                    # Use existing stability analysis method
+        # Group 1: Deterministic Cross-Precision Comparisons
+        logger.info("=== Group 1: Deterministic Cross-Precision Comparisons ===")
+        for i, config1 in enumerate(det_configs):
+            for j, config2 in enumerate(det_configs):
+                if i < j:
+                    comparison_key = f"{config1}_vs_{config2}"
+                    logger.info(f"Comparing {config1} vs {config2}...")
+
                     diff_results = self._calculate_embedding_differences(
-                        embeddings_dict[prec1],
-                        embeddings_dict[prec2],
-                        prec1,
-                        prec2
+                        embeddings_dict[config1],
+                        embeddings_dict[config2],
+                        config1,
+                        config2
                     )
 
+                    results["grouped_comparisons"]["deterministic_cross_precision"][comparison_key] = diff_results
                     results["pairwise_comparisons"][comparison_key] = diff_results
+
+        # Group 2: Non-Deterministic Cross-Precision Comparisons
+        logger.info("=== Group 2: Non-Deterministic Cross-Precision Comparisons ===")
+        for i, config1 in enumerate(nondet_configs):
+            for j, config2 in enumerate(nondet_configs):
+                if i < j:
+                    comparison_key = f"{config1}_vs_{config2}"
+                    logger.info(f"Comparing {config1} vs {config2}...")
+
+                    diff_results = self._calculate_embedding_differences(
+                        embeddings_dict[config1],
+                        embeddings_dict[config2],
+                        config1,
+                        config2
+                    )
+
+                    results["grouped_comparisons"]["nondeterministic_cross_precision"][comparison_key] = diff_results
+                    results["pairwise_comparisons"][comparison_key] = diff_results
+
+        # Group 3: Within-Precision (Deterministic vs Non-Deterministic)
+        logger.info("=== Group 3: Within-Precision (Deterministic vs Non-Deterministic) ===")
+        base_precisions = set()
+        for config in precision_names:
+            base_precision = config.replace('_deterministic', '').replace('_nondeterministic', '')
+            base_precisions.add(base_precision)
+
+        for base_precision in base_precisions:
+            det_config = f"{base_precision}_deterministic"
+            nondet_config = f"{base_precision}_nondeterministic"
+
+            if det_config in embeddings_dict and nondet_config in embeddings_dict:
+                comparison_key = f"{det_config}_vs_{nondet_config}"
+                logger.info(f"Comparing {det_config} vs {nondet_config}...")
+
+                diff_results = self._calculate_embedding_differences(
+                    embeddings_dict[det_config],
+                    embeddings_dict[nondet_config],
+                    det_config,
+                    nondet_config
+                )
+
+                results["grouped_comparisons"]["within_precision_det_vs_nondet"][comparison_key] = diff_results
+                results["pairwise_comparisons"][comparison_key] = diff_results
 
         # Generate summary
         results["summary"] = self._generate_comparison_summary(results["pairwise_comparisons"])
