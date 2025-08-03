@@ -47,6 +47,7 @@ slurm-*.out
 slurm-*.err
 
 # Data files
+data/
 *.pkl
 *.pickle
 *.h5
