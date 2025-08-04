@@ -200,10 +200,15 @@ def run_precision_analysis():
         for comp_name, comp_data in det_vs_nondet_comps.items():
             l2_mean_str = comp_data.get('l2_distance', {}).get('mean', '0')
             try:
-                l2_mean = float(l2_mean_str.replace('e-', 'E-').replace('e+', 'E+'))
+                # Handle both string and float types
+                if isinstance(l2_mean_str, str):
+                    l2_mean = float(l2_mean_str.replace('e-', 'E-').replace('e+', 'E+'))
+                else:
+                    l2_mean = float(l2_mean_str)
+                    
                 if l2_mean == 0:
                     zero_diff_count += 1
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, AttributeError):
                 continue
         
         if zero_diff_count > 0:
