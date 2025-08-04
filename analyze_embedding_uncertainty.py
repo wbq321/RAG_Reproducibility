@@ -1,0 +1,950 @@
+#!/usr/bin/env python3
+"""
+Embedding Uncertainty Analysis Script
+Analyzes embedding reproducibility and precision comparison results
+"""
+
+import json
+import os
+import re
+from pathlib import Path
+from datetime import datetime
+from typing import Dict, Any, List, Tuple
+import numpy as np
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder for NumPy types"""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NumpyEncoder, self).default(obj)
+
+class EmbeddingUncertaintyAnalyzer:
+    def __init__(self, results_dir="results"):
+        self.results_dir = Path(results_dir)
+        self.analyze_dir = self.results_dir / "analyze"
+        self.analyze_dir.mkdir(exist_ok=True)
+
+        self.reproducibility_data = None
+        self.precision_data = None
+
+    def load_embedding_reproducibility_results(self):
+        """Load embedding reproducibility results"""
+        repro_file = self.results_dir / "embedding_reproducibility_results.json"
+        if repro_file.exists():
+            try:
+                with open(repro_file, 'r', encoding='utf-8') as f:
+                    self.reproducibility_data = json.load(f)
+                print(f"✅ Loaded embedding reproducibility results")
+                return True
+            except Exception as e:
+                print(f"❌ Error loading embedding reproducibility results: {e}")
+                return False
+        else:
+            print(f"❌ Embedding reproducibility results file not found: {repro_file}")
+            return False
+
+    def parse_precision_comparison_report(self):
+        """Parse the precision comparison markdown report"""
+        report_file = self.results_dir / "precision_comparison_report.md"
+        if not report_file.exists():
+            print(f"❌ Precision comparison report not found: {report_file}")
+            return False
+
+        try:
+            with open(report_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Extract metadata
+            metadata = {}
+            metadata_pattern = r'\*\*(Generated|Model|Device|Number of texts)\*\*:\s*(.+)'
+            for match in re.finditer(metadata_pattern, content):
+                key = match.group(1).lower().replace(' ', '_')
+                value = match.group(2).strip()
+                metadata[key] = value
+
+            # Extract precision configurations
+            config_pattern = r'- \*\*(.+?)\*\*'
+            configs = re.findall(config_pattern, content)
+
+            # Extract summary results
+            summary = {}
+            summary_pattern = r'- \*\*(Most similar|Least similar|Average L2|Average cosine).+?\*\*:\s*(.+)'
+            for match in re.finditer(summary_pattern, content):
+                key = match.group(1).lower().replace(' ', '_').replace('average_', 'avg_')
+                value = match.group(2).strip()
+                summary[key] = value
+
+            # Extract detailed comparisons
+            comparisons = {}
+
+            # Pattern to match each comparison section
+            comparison_sections = re.split(r'### (.+?)\n', content)[1:]  # Skip first empty element
+
+            for i in range(0, len(comparison_sections), 2):
+                if i + 1 < len(comparison_sections):
+                    comparison_name = comparison_sections[i].strip()
+                    comparison_content = comparison_sections[i + 1]
+
+                    # Extract metrics from this comparison
+                    comparison_data = {}
+
+                    # L2 Distance metrics
+                    l2_pattern = r'\*\*L2 Distance:\*\*\n- Mean: (.+?)\n- Std: (.+?)\n(?:.*?\n)*?- 95th percentile: (.+?)\n'
+                    l2_match = re.search(l2_pattern, comparison_content, re.DOTALL)
+                    if l2_match:
+                        comparison_data['l2_distance'] = {
+                            'mean': l2_match.group(1).strip(),
+                            'std': l2_match.group(2).strip(),
+                            'percentile_95': l2_match.group(3).strip()
+                        }
+
+                    # Cosine Similarity metrics
+                    cos_pattern = r'\*\*Cosine Similarity:\*\*\n- Mean: (.+?)\n- Min: (.+?)\n'
+                    cos_match = re.search(cos_pattern, comparison_content)
+                    if cos_match:
+                        comparison_data['cosine_similarity'] = {
+                            'mean': cos_match.group(1).strip(),
+                            'min': cos_match.group(2).strip()
+                        }
+
+                    # Element-wise differences
+                    elem_pattern = r'\*\*Element-wise Differences:\*\*\n- Mean absolute difference: (.+?)\n- Max absolute difference: (.+?)\n- Fraction of small differences \(<1e-6\): (.+?)\n'
+                    elem_match = re.search(elem_pattern, comparison_content)
+                    if elem_match:
+                        comparison_data['element_wise_diff'] = {
+                            'mean_abs_diff': elem_match.group(1).strip(),
+                            'max_abs_diff': elem_match.group(2).strip(),
+                            'fraction_small_diff': elem_match.group(3).strip()
+                        }
+
+                    comparisons[comparison_name] = comparison_data
+
+            self.precision_data = {
+                'metadata': metadata,
+                'configurations': configs,
+                'summary': summary,
+                'comparisons': comparisons
+            }
+
+            print(f"✅ Parsed precision comparison report ({len(comparisons)} comparisons)")
+            return True
+
+        except Exception as e:
+            print(f"❌ Error parsing precision comparison report: {e}")
+            return False
+
+    def analyze_reproducibility_stability(self) -> Dict[str, Any]:
+        """Analyze embedding reproducibility stability"""
+        if not self.reproducibility_data:
+            return {}
+
+        analysis = {
+            'configurations_tested': list(self.reproducibility_data.keys()),
+            'stability_summary': {},
+            'deterministic_vs_nondeterministic': {},
+            'performance_metrics': {}
+        }
+
+        # Analyze each configuration
+        for config_name, config_data in self.reproducibility_data.items():
+            metrics = config_data.get('metrics', {})
+            config_info = config_data.get('config', {})
+
+            # Extract key stability metrics
+            l2_mean = float(metrics.get('l2_distance', {}).get('mean', 0))
+            cosine_mean = float(metrics.get('cosine_similarity', {}).get('mean', 1))
+            exact_match_rate = float(metrics.get('exact_match_rate', 0))
+
+            # Extract timing information
+            timing = metrics.get('timing', {})
+            mean_duration = timing.get('mean_duration', 0)
+
+            analysis['stability_summary'][config_name] = {
+                'precision': config_info.get('precision'),
+                'deterministic': config_info.get('deterministic'),
+                'l2_distance_mean': l2_mean,
+                'cosine_similarity_mean': cosine_mean,
+                'exact_match_rate': exact_match_rate,
+                'mean_encoding_time': mean_duration,
+                'stability_grade': 'Perfect' if exact_match_rate == 1.0 else 'Variable'
+            }
+
+        # Compare deterministic vs non-deterministic
+        det_configs = {k: v for k, v in analysis['stability_summary'].items()
+                      if 'Deterministic' in k}
+        nondet_configs = {k: v for k, v in analysis['stability_summary'].items()
+                         if 'Non-Deterministic' in k}
+
+        if det_configs and nondet_configs:
+            det_l2_mean = np.mean([config['l2_distance_mean'] for config in det_configs.values()])
+            nondet_l2_mean = np.mean([config['l2_distance_mean'] for config in nondet_configs.values()])
+
+            det_exact_match = np.mean([config['exact_match_rate'] for config in det_configs.values()])
+            nondet_exact_match = np.mean([config['exact_match_rate'] for config in nondet_configs.values()])
+
+            analysis['deterministic_vs_nondeterministic'] = {
+                'deterministic': {
+                    'avg_l2_distance': det_l2_mean,
+                    'avg_exact_match_rate': det_exact_match,
+                    'num_configs': len(det_configs)
+                },
+                'non_deterministic': {
+                    'avg_l2_distance': nondet_l2_mean,
+                    'avg_exact_match_rate': nondet_exact_match,
+                    'num_configs': len(nondet_configs)
+                },
+                'difference_detected': abs(det_l2_mean - nondet_l2_mean) > 1e-10
+            }
+
+        return analysis
+
+    def analyze_precision_effects(self) -> Dict[str, Any]:
+        """Analyze precision-related effects from comparison data"""
+        if not self.precision_data:
+            return {}
+
+        comparisons = self.precision_data.get('comparisons', {})
+
+        analysis = {
+            'cross_precision_comparisons': {},
+            'deterministic_mode_comparisons': {},
+            'precision_ranking': {},
+            'insights': []
+        }
+
+        # Categorize comparisons
+        cross_precision = {}
+        det_vs_nondet = {}
+
+        for comp_name, comp_data in comparisons.items():
+            if 'DETERMINISTIC VS' in comp_name and 'NONDETERMINISTIC' in comp_name:
+                # Within-precision deterministic vs non-deterministic
+                det_vs_nondet[comp_name] = comp_data
+            elif ('DETERMINISTIC VS' in comp_name and 'DETERMINISTIC' in comp_name.split('VS')[1]) or \
+                 ('NONDETERMINISTIC VS' in comp_name and 'NONDETERMINISTIC' in comp_name.split('VS')[1]):
+                # Cross-precision comparisons (same deterministic mode)
+                cross_precision[comp_name] = comp_data
+
+        analysis['cross_precision_comparisons'] = cross_precision
+        analysis['deterministic_mode_comparisons'] = det_vs_nondet
+
+        # Analyze precision effects
+        precision_l2_distances = {}
+        for comp_name, comp_data in cross_precision.items():
+            l2_data = comp_data.get('l2_distance', {})
+            l2_mean_str = l2_data.get('mean', '0')
+
+            try:
+                l2_mean = float(l2_mean_str.replace('e-', 'E-').replace('e+', 'E+'))
+                precision_l2_distances[comp_name] = l2_mean
+            except (ValueError, TypeError):
+                continue
+
+        # Rank precisions by similarity (lower L2 distance = more similar)
+        if precision_l2_distances:
+            sorted_precisions = sorted(precision_l2_distances.items(), key=lambda x: x[1])
+            analysis['precision_ranking'] = {
+                'most_similar_pair': sorted_precisions[0][0] if sorted_precisions else None,
+                'least_similar_pair': sorted_precisions[-1][0] if sorted_precisions else None,
+                'all_rankings': sorted_precisions
+            }
+
+        # Analyze deterministic vs non-deterministic differences
+        det_nondet_differences = {}
+        for comp_name, comp_data in det_vs_nondet.items():
+            l2_data = comp_data.get('l2_distance', {})
+            l2_mean_str = l2_data.get('mean', '0')
+
+            try:
+                l2_mean = float(l2_mean_str.replace('e-', 'E-').replace('e+', 'E+'))
+                det_nondet_differences[comp_name] = l2_mean
+            except (ValueError, TypeError):
+                continue
+
+        # Generate insights
+        insights = []
+
+        # Check if deterministic vs non-deterministic shows differences
+        zero_diff_count = sum(1 for diff in det_nondet_differences.values() if diff == 0)
+        if zero_diff_count > 0:
+            insights.append(f"⚠️ {zero_diff_count}/{len(det_nondet_differences)} precision types show no difference between deterministic and non-deterministic modes")
+
+        # Check precision stability
+        if precision_l2_distances:
+            max_diff = max(precision_l2_distances.values())
+            min_diff = min(precision_l2_distances.values())
+            if max_diff > 1e-2:
+                insights.append(f"⚠️ Significant precision differences detected (max L2 distance: {max_diff:.2e})")
+            elif max_diff < 1e-5:
+                insights.append(f"✅ All precision types show high similarity (max L2 distance: {max_diff:.2e})")
+
+        analysis['insights'] = insights
+
+        return analysis
+
+    def generate_comprehensive_analysis(self) -> Dict[str, Any]:
+        """Generate comprehensive embedding uncertainty analysis"""
+        print("🔬 Generating comprehensive embedding uncertainty analysis...")
+
+        analysis = {
+            'metadata': {
+                'timestamp': datetime.now().isoformat(),
+                'analysis_type': 'embedding_uncertainty',
+                'data_sources': []
+            },
+            'reproducibility_analysis': {},
+            'precision_analysis': {},
+            'cross_analysis': {},
+            'summary_findings': {},
+            'recommendations': [],
+            'user_questions': {}
+        }
+
+        # Track data sources
+        if self.reproducibility_data:
+            analysis['metadata']['data_sources'].append('embedding_reproducibility_results.json')
+        if self.precision_data:
+            analysis['metadata']['data_sources'].append('precision_comparison_report.md')
+
+        # Analyze reproducibility
+        if self.reproducibility_data:
+            analysis['reproducibility_analysis'] = self.analyze_reproducibility_stability()
+
+        # Analyze precision effects
+        if self.precision_data:
+            analysis['precision_analysis'] = self.analyze_precision_effects()
+
+        # Cross-analysis (if both data sources available)
+        if self.reproducibility_data and self.precision_data:
+            analysis['cross_analysis'] = self.cross_validate_findings()
+
+        # Answer specific user questions
+        analysis['user_questions'] = self.answer_user_questions(analysis)
+
+        # Generate summary findings
+        analysis['summary_findings'] = self.generate_summary_findings(analysis)
+
+        # Generate recommendations
+        analysis['recommendations'] = self.generate_recommendations(analysis)
+
+        return analysis
+
+    def cross_validate_findings(self) -> Dict[str, Any]:
+        """Cross-validate findings between reproducibility and precision analysis"""
+        cross_analysis = {
+            'consistency_check': {},
+            'validation_status': 'unknown'
+        }
+
+        # Check if reproducibility results align with precision comparison
+        repro_summary = self.reproducibility_data
+        precision_det_vs_nondet = self.precision_data.get('comparisons', {})
+
+        # Look for deterministic vs non-deterministic comparisons in precision data
+        det_nondet_comps = {k: v for k, v in precision_det_vs_nondet.items()
+                           if 'DETERMINISTIC VS' in k and 'NONDETERMINISTIC' in k}
+
+        if det_nondet_comps:
+            # Check if precision data shows zero differences for det vs nondet
+            zero_diff_count = 0
+            total_count = len(det_nondet_comps)
+
+            for comp_name, comp_data in det_nondet_comps.items():
+                l2_mean_str = comp_data.get('l2_distance', {}).get('mean', '0')
+                try:
+                    l2_mean = float(l2_mean_str.replace('e-', 'E-').replace('e+', 'E+'))
+                    if l2_mean == 0:
+                        zero_diff_count += 1
+                except (ValueError, TypeError):
+                    continue
+
+            cross_analysis['consistency_check'] = {
+                'zero_diff_precision_comparisons': zero_diff_count,
+                'total_precision_comparisons': total_count,
+                'percentage_zero_diff': (zero_diff_count / total_count * 100) if total_count > 0 else 0
+            }
+
+            # Validation status
+            if zero_diff_count == total_count:
+                cross_analysis['validation_status'] = 'consistent_no_differences'
+            elif zero_diff_count == 0:
+                cross_analysis['validation_status'] = 'consistent_all_differences'
+            else:
+                cross_analysis['validation_status'] = 'mixed_results'
+
+        return cross_analysis
+
+    def answer_user_questions(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Answer specific user questions about configuration reproducibility and differences"""
+        user_questions = {
+            'question_1_reproducibility': {
+                'question': 'For every config (8 total), is it reproducible?',
+                'analysis': {},
+                'summary': ''
+            },
+            'question_2_config_differences': {
+                'question': 'For different config (fixed det/non-det, fixed precision), are they different?',
+                'analysis': {},
+                'summary': ''
+            }
+        }
+
+        # Question 1: Reproducibility of each configuration
+        repro_analysis = analysis.get('reproducibility_analysis', {})
+        stability_summary = repro_analysis.get('stability_summary', {})
+
+        config_reproducibility = {}
+        reproducible_count = 0
+        total_configs = 0
+
+        # Expected 8 configurations: 4 precisions × 2 deterministic modes
+        expected_configs = [
+            'FP32 Deterministic', 'FP32 Non-Deterministic',
+            'FP16 Deterministic', 'FP16 Non-Deterministic',
+            'BF16 Deterministic', 'BF16 Non-Deterministic',
+            'TF32 Deterministic', 'TF32 Non-Deterministic'
+        ]
+
+        for config_name in expected_configs:
+            if config_name in stability_summary:
+                config_data = stability_summary[config_name]
+                exact_match = config_data.get('exact_match_rate', 0)
+                l2_distance = config_data.get('l2_distance_mean', float('inf'))
+
+                is_reproducible = exact_match == 1.0 and l2_distance == 0.0
+                config_reproducibility[config_name] = {
+                    'reproducible': is_reproducible,
+                    'exact_match_rate': exact_match,
+                    'l2_distance': l2_distance,
+                    'status': 'Perfect' if is_reproducible else 'Variable'
+                }
+
+                if is_reproducible:
+                    reproducible_count += 1
+                total_configs += 1
+            else:
+                config_reproducibility[config_name] = {
+                    'reproducible': None,
+                    'exact_match_rate': None,
+                    'l2_distance': None,
+                    'status': 'Not Tested'
+                }
+
+        user_questions['question_1_reproducibility']['analysis'] = config_reproducibility
+
+        if total_configs > 0:
+            reproducibility_rate = (reproducible_count / total_configs) * 100
+            user_questions['question_1_reproducibility']['summary'] = (
+                f"{reproducible_count}/{total_configs} configurations are perfectly reproducible "
+                f"({reproducibility_rate:.1f}%). "
+                f"{len(expected_configs) - total_configs} configurations were not tested."
+            )
+        else:
+            user_questions['question_1_reproducibility']['summary'] = "No reproducibility data available for analysis."
+
+        # Question 2: Differences between configurations
+        precision_analysis = analysis.get('precision_analysis', {})
+        cross_precision_comps = precision_analysis.get('cross_precision_comparisons', {})
+        det_mode_comps = precision_analysis.get('deterministic_mode_comparisons', {})
+
+        config_differences = {
+            'deterministic_cross_precision': {},
+            'nondeterministic_cross_precision': {},
+            'within_precision_det_vs_nondet': {}
+        }
+
+        # Analyze cross-precision differences (same deterministic mode)
+        det_cross_precision = {}
+        nondet_cross_precision = {}
+
+        for comp_name, comp_data in cross_precision_comps.items():
+            l2_data = comp_data.get('l2_distance', {})
+            l2_mean_str = l2_data.get('mean', '0')
+
+            try:
+                l2_mean = float(l2_mean_str.replace('e-', 'E-').replace('e+', 'E+'))
+
+                # Determine if this is deterministic or non-deterministic comparison
+                if 'DETERMINISTIC VS' in comp_name and 'NONDETERMINISTIC' not in comp_name:
+                    # Both sides are deterministic
+                    det_cross_precision[comp_name] = {
+                        'l2_distance': l2_mean,
+                        'different': l2_mean > 1e-10,
+                        'comparison_type': 'deterministic_cross_precision'
+                    }
+                elif 'NONDETERMINISTIC VS' in comp_name and 'DETERMINISTIC' not in comp_name.split('VS')[1]:
+                    # Both sides are non-deterministic
+                    nondet_cross_precision[comp_name] = {
+                        'l2_distance': l2_mean,
+                        'different': l2_mean > 1e-10,
+                        'comparison_type': 'nondeterministic_cross_precision'
+                    }
+            except (ValueError, TypeError):
+                continue
+
+        config_differences['deterministic_cross_precision'] = det_cross_precision
+        config_differences['nondeterministic_cross_precision'] = nondet_cross_precision
+
+        # Analyze within-precision deterministic vs non-deterministic differences
+        det_vs_nondet_diffs = {}
+        for comp_name, comp_data in det_mode_comps.items():
+            l2_data = comp_data.get('l2_distance', {})
+            l2_mean_str = l2_data.get('mean', '0')
+
+            try:
+                l2_mean = float(l2_mean_str.replace('e-', 'E-').replace('e+', 'E+'))
+                precision_type = comp_name.split(' ')[0]
+
+                det_vs_nondet_diffs[comp_name] = {
+                    'precision_type': precision_type,
+                    'l2_distance': l2_mean,
+                    'different': l2_mean > 1e-10,
+                    'comparison_type': 'within_precision_det_vs_nondet'
+                }
+            except (ValueError, TypeError):
+                continue
+
+        config_differences['within_precision_det_vs_nondet'] = det_vs_nondet_diffs
+
+        user_questions['question_2_config_differences']['analysis'] = config_differences
+
+        # Generate summary for question 2
+        summary_parts = []
+
+        # Cross-precision differences (deterministic)
+        if det_cross_precision:
+            det_different_count = sum(1 for comp in det_cross_precision.values() if comp['different'])
+            det_total = len(det_cross_precision)
+            summary_parts.append(
+                f"Deterministic cross-precision: {det_different_count}/{det_total} comparisons show differences"
+            )
+
+        # Cross-precision differences (non-deterministic)
+        if nondet_cross_precision:
+            nondet_different_count = sum(1 for comp in nondet_cross_precision.values() if comp['different'])
+            nondet_total = len(nondet_cross_precision)
+            summary_parts.append(
+                f"Non-deterministic cross-precision: {nondet_different_count}/{nondet_total} comparisons show differences"
+            )
+
+        # Within-precision deterministic vs non-deterministic
+        if det_vs_nondet_diffs:
+            det_nondet_different_count = sum(1 for comp in det_vs_nondet_diffs.values() if comp['different'])
+            det_nondet_total = len(det_vs_nondet_diffs)
+            summary_parts.append(
+                f"Deterministic vs non-deterministic: {det_nondet_different_count}/{det_nondet_total} comparisons show differences"
+            )
+
+        if summary_parts:
+            user_questions['question_2_config_differences']['summary'] = "; ".join(summary_parts)
+        else:
+            user_questions['question_2_config_differences']['summary'] = "No configuration difference data available for analysis."
+
+        return user_questions
+
+    def generate_summary_findings(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate key summary findings"""
+        findings = {
+            'key_findings': [],
+            'reproducibility_grade': 'unknown',
+            'precision_stability': 'unknown',
+            'deterministic_behavior': 'unknown'
+        }
+
+        # Reproducibility findings
+        repro_analysis = analysis.get('reproducibility_analysis', {})
+        if repro_analysis:
+            stability_summary = repro_analysis.get('stability_summary', {})
+            perfect_configs = sum(1 for config in stability_summary.values()
+                                if config.get('stability_grade') == 'Perfect')
+            total_configs = len(stability_summary)
+
+            if total_configs > 0:
+                perfect_percentage = (perfect_configs / total_configs) * 100
+                findings['reproducibility_grade'] = f"{perfect_percentage:.1f}% Perfect"
+
+                if perfect_percentage == 100:
+                    findings['key_findings'].append("✅ All tested configurations show perfect reproducibility")
+                elif perfect_percentage >= 80:
+                    findings['key_findings'].append(f"⚠️ Most configurations ({perfect_percentage:.1f}%) show perfect reproducibility")
+                else:
+                    findings['key_findings'].append(f"❌ Low reproducibility: only {perfect_percentage:.1f}% perfect")
+
+        # Precision findings
+        precision_analysis = analysis.get('precision_analysis', {})
+        if precision_analysis:
+            insights = precision_analysis.get('insights', [])
+            findings['key_findings'].extend(insights)
+
+            # Determine precision stability
+            det_vs_nondet = precision_analysis.get('deterministic_mode_comparisons', {})
+            zero_diff_count = 0
+            for comp_data in det_vs_nondet.values():
+                l2_mean_str = comp_data.get('l2_distance', {}).get('mean', '0')
+                try:
+                    l2_mean = float(l2_mean_str.replace('e-', 'E-').replace('e+', 'E+'))
+                    if l2_mean == 0:
+                        zero_diff_count += 1
+                except (ValueError, TypeError):
+                    continue
+
+            if zero_diff_count == len(det_vs_nondet) and len(det_vs_nondet) > 0:
+                findings['deterministic_behavior'] = 'identical'
+                findings['key_findings'].append("❗ Deterministic and non-deterministic modes produce identical results")
+            elif zero_diff_count == 0 and len(det_vs_nondet) > 0:
+                findings['deterministic_behavior'] = 'different'
+                findings['key_findings'].append("✅ Deterministic and non-deterministic modes show expected differences")
+            else:
+                findings['deterministic_behavior'] = 'mixed'
+
+        return findings
+
+    def generate_recommendations(self, analysis: Dict[str, Any]) -> List[str]:
+        """Generate actionable recommendations"""
+        recommendations = []
+
+        summary = analysis.get('summary_findings', {})
+
+        # Reproducibility recommendations
+        repro_grade = summary.get('reproducibility_grade', '')
+        if 'Perfect' in repro_grade:
+            if '100.0%' in repro_grade:
+                recommendations.append("✅ Current configuration is optimal for reproducibility")
+            else:
+                recommendations.append("⚠️ Consider investigating non-perfect configurations for potential improvements")
+
+        # Deterministic behavior recommendations
+        det_behavior = summary.get('deterministic_behavior', '')
+        if det_behavior == 'identical':
+            recommendations.append("🔧 CRITICAL: Fix non-deterministic mode implementation - it should differ from deterministic mode")
+            recommendations.append("🔧 Verify random seed reset in non-deterministic mode")
+            recommendations.append("🔧 Ensure model state is properly reset between configurations")
+        elif det_behavior == 'different':
+            recommendations.append("✅ Deterministic controls are working correctly")
+
+        # Precision recommendations
+        precision_analysis = analysis.get('precision_analysis', {})
+        if precision_analysis:
+            ranking = precision_analysis.get('precision_ranking', {})
+            most_similar = ranking.get('most_similar_pair', '')
+            if 'FP32' in most_similar and 'TF32' in most_similar:
+                recommendations.append("💡 FP32 and TF32 show highest similarity - TF32 may be suitable for performance optimization")
+
+            least_similar = ranking.get('least_similar_pair', '')
+            if 'BF16' in least_similar:
+                recommendations.append("⚠️ BF16 shows largest differences - use with caution in precision-critical applications")
+
+        # General recommendations
+        recommendations.extend([
+            "📊 Consider running tests with larger sample sizes for statistical significance",
+            "🔄 Implement continuous monitoring of embedding reproducibility in production",
+            "📝 Document precision requirements for your specific use case"
+        ])
+
+        return recommendations
+
+    def save_analysis_results(self, analysis: Dict[str, Any]):
+        """Save analysis results to files"""
+        # Save JSON results
+        json_file = self.analyze_dir / "embedding_uncertainty_analysis.json"
+        with open(json_file, 'w', encoding='utf-8') as f:
+            json.dump(analysis, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
+        print(f"💾 Saved JSON analysis: {json_file}")
+
+        # Generate markdown report
+        self.generate_markdown_report(analysis)
+
+    def generate_markdown_report(self, analysis: Dict[str, Any]):
+        """Generate comprehensive markdown report"""
+        report_file = self.analyze_dir / "embedding_uncertainty_analysis_report.md"
+
+        with open(report_file, 'w', encoding='utf-8') as f:
+            f.write("# 🔬 Embedding Uncertainty Analysis Report\n\n")
+
+            # Metadata
+            metadata = analysis.get('metadata', {})
+            f.write(f"**Generated**: {metadata.get('timestamp', 'Unknown')}\n")
+            f.write(f"**Analysis Type**: {metadata.get('analysis_type', 'Unknown')}\n")
+            f.write(f"**Data Sources**: {', '.join(metadata.get('data_sources', []))}\n\n")
+
+            # Executive Summary
+            f.write("## 📋 Executive Summary\n\n")
+            summary = analysis.get('summary_findings', {})
+
+            f.write(f"- **Reproducibility Grade**: {summary.get('reproducibility_grade', 'Unknown')}\n")
+            f.write(f"- **Deterministic Behavior**: {summary.get('deterministic_behavior', 'Unknown')}\n")
+            f.write(f"- **Precision Stability**: {summary.get('precision_stability', 'Unknown')}\n\n")
+
+            # Key Findings
+            key_findings = summary.get('key_findings', [])
+            if key_findings:
+                f.write("### 🎯 Key Findings\n\n")
+                for finding in key_findings:
+                    f.write(f"- {finding}\n")
+                f.write("\n")
+
+            # User Questions Analysis
+            user_questions = analysis.get('user_questions', {})
+            if user_questions:
+                f.write("## ❓ User Questions Analysis\n\n")
+
+                # Question 1: Configuration Reproducibility
+                q1 = user_questions.get('question_1_reproducibility', {})
+                if q1:
+                    f.write("### Question 1: Configuration Reproducibility\n\n")
+                    f.write(f"**Question**: {q1.get('question', 'Unknown')}\n\n")
+                    f.write(f"**Summary**: {q1.get('summary', 'No analysis available')}\n\n")
+
+                    q1_analysis = q1.get('analysis', {})
+                    if q1_analysis:
+                        f.write("**Detailed Results**:\n\n")
+                        f.write("| Configuration | Reproducible | Exact Match Rate | L2 Distance | Status |\n")
+                        f.write("|---------------|--------------|------------------|-------------|--------|\n")
+
+                        for config_name, config_data in q1_analysis.items():
+                            reproducible = config_data.get('reproducible')
+                            exact_match = config_data.get('exact_match_rate')
+                            l2_distance = config_data.get('l2_distance')
+                            status = config_data.get('status', 'Unknown')
+
+                            if reproducible is None:
+                                repro_str = "❓ Not Tested"
+                                exact_str = "N/A"
+                                l2_str = "N/A"
+                            else:
+                                repro_str = "✅ Yes" if reproducible else "❌ No"
+                                exact_str = f"{exact_match:.3f}" if exact_match is not None else "N/A"
+                                l2_str = f"{l2_distance:.2e}" if l2_distance is not None else "N/A"
+
+                            f.write(f"| {config_name} | {repro_str} | {exact_str} | {l2_str} | {status} |\n")
+                        f.write("\n")
+
+                # Question 2: Configuration Differences
+                q2 = user_questions.get('question_2_config_differences', {})
+                if q2:
+                    f.write("### Question 2: Configuration Differences\n\n")
+                    f.write(f"**Question**: {q2.get('question', 'Unknown')}\n\n")
+                    f.write(f"**Summary**: {q2.get('summary', 'No analysis available')}\n\n")
+
+                    q2_analysis = q2.get('analysis', {})
+
+                    # Deterministic cross-precision comparisons
+                    det_cross = q2_analysis.get('deterministic_cross_precision', {})
+                    if det_cross:
+                        f.write("**Deterministic Cross-Precision Comparisons**:\n\n")
+                        f.write("| Comparison | L2 Distance | Different | Status |\n")
+                        f.write("|------------|-------------|-----------|--------|\n")
+
+                        for comp_name, comp_data in det_cross.items():
+                            l2_dist = comp_data.get('l2_distance', 0)
+                            different = comp_data.get('different', False)
+                            status = "✅ Different" if different else "⚠️ Similar"
+
+                            f.write(f"| {comp_name} | {l2_dist:.2e} | {different} | {status} |\n")
+                        f.write("\n")
+
+                    # Non-deterministic cross-precision comparisons
+                    nondet_cross = q2_analysis.get('nondeterministic_cross_precision', {})
+                    if nondet_cross:
+                        f.write("**Non-Deterministic Cross-Precision Comparisons**:\n\n")
+                        f.write("| Comparison | L2 Distance | Different | Status |\n")
+                        f.write("|------------|-------------|-----------|--------|\n")
+
+                        for comp_name, comp_data in nondet_cross.items():
+                            l2_dist = comp_data.get('l2_distance', 0)
+                            different = comp_data.get('different', False)
+                            status = "✅ Different" if different else "⚠️ Similar"
+
+                            f.write(f"| {comp_name} | {l2_dist:.2e} | {different} | {status} |\n")
+                        f.write("\n")
+
+                    # Within-precision deterministic vs non-deterministic
+                    within_precision = q2_analysis.get('within_precision_det_vs_nondet', {})
+                    if within_precision:
+                        f.write("**Within-Precision: Deterministic vs Non-Deterministic**:\n\n")
+                        f.write("| Precision Type | L2 Distance | Different | Status |\n")
+                        f.write("|----------------|-------------|-----------|--------|\n")
+
+                        for comp_name, comp_data in within_precision.items():
+                            precision_type = comp_data.get('precision_type', 'Unknown')
+                            l2_dist = comp_data.get('l2_distance', 0)
+                            different = comp_data.get('different', False)
+                            status = "✅ Different" if different else "⚠️ Identical"
+
+                            f.write(f"| {precision_type} | {l2_dist:.2e} | {different} | {status} |\n")
+                        f.write("\n")
+
+            # Reproducibility Analysis
+            repro_analysis = analysis.get('reproducibility_analysis', {})
+            if repro_analysis:
+                f.write("## 🔄 Reproducibility Analysis\n\n")
+
+                # Configuration summary
+                stability_summary = repro_analysis.get('stability_summary', {})
+                if stability_summary:
+                    f.write("### Configuration Stability\n\n")
+                    f.write("| Configuration | Precision | Deterministic | L2 Distance | Cosine Similarity | Exact Match | Stability |\n")
+                    f.write("|---------------|-----------|---------------|-------------|-------------------|-------------|----------|\n")
+
+                    for config_name, config_data in stability_summary.items():
+                        precision = config_data.get('precision', 'Unknown')
+                        deterministic = config_data.get('deterministic', 'Unknown')
+                        l2_dist = f"{config_data.get('l2_distance_mean', 0):.2e}"
+                        cos_sim = f"{config_data.get('cosine_similarity_mean', 1):.6f}"
+                        exact_match = f"{config_data.get('exact_match_rate', 0):.3f}"
+                        stability = config_data.get('stability_grade', 'Unknown')
+
+                        f.write(f"| {config_name} | {precision} | {deterministic} | {l2_dist} | {cos_sim} | {exact_match} | {stability} |\n")
+                    f.write("\n")
+
+                # Deterministic vs Non-deterministic
+                det_vs_nondet = repro_analysis.get('deterministic_vs_nondeterministic', {})
+                if det_vs_nondet:
+                    f.write("### Deterministic vs Non-Deterministic Comparison\n\n")
+                    det_data = det_vs_nondet.get('deterministic', {})
+                    nondet_data = det_vs_nondet.get('non_deterministic', {})
+
+                    f.write(f"**Deterministic Mode**:\n")
+                    f.write(f"- Average L2 Distance: {det_data.get('avg_l2_distance', 0):.2e}\n")
+                    f.write(f"- Average Exact Match Rate: {det_data.get('avg_exact_match_rate', 0):.3f}\n")
+                    f.write(f"- Configurations: {det_data.get('num_configs', 0)}\n\n")
+
+                    f.write(f"**Non-Deterministic Mode**:\n")
+                    f.write(f"- Average L2 Distance: {nondet_data.get('avg_l2_distance', 0):.2e}\n")
+                    f.write(f"- Average Exact Match Rate: {nondet_data.get('avg_exact_match_rate', 0):.3f}\n")
+                    f.write(f"- Configurations: {nondet_data.get('num_configs', 0)}\n\n")
+
+                    difference_detected = det_vs_nondet.get('difference_detected', False)
+                    f.write(f"**Difference Detected**: {'Yes' if difference_detected else 'No'}\n\n")
+
+            # Precision Analysis
+            precision_analysis = analysis.get('precision_analysis', {})
+            if precision_analysis:
+                f.write("## 🎯 Precision Analysis\n\n")
+
+                # Precision ranking
+                ranking = precision_analysis.get('precision_ranking', {})
+                if ranking:
+                    f.write("### Precision Similarity Ranking\n\n")
+                    f.write(f"**Most Similar Pair**: {ranking.get('most_similar_pair', 'Unknown')}\n")
+                    f.write(f"**Least Similar Pair**: {ranking.get('least_similar_pair', 'Unknown')}\n\n")
+
+                    all_rankings = ranking.get('all_rankings', [])
+                    if all_rankings:
+                        f.write("**All Pairwise Comparisons** (sorted by L2 distance):\n\n")
+                        for comp_name, l2_dist in all_rankings:
+                            f.write(f"- {comp_name}: {l2_dist:.2e}\n")
+                        f.write("\n")
+
+                # Deterministic mode comparisons
+                det_mode_comps = precision_analysis.get('deterministic_mode_comparisons', {})
+                if det_mode_comps:
+                    f.write("### Deterministic vs Non-Deterministic Mode Differences\n\n")
+                    f.write("| Precision Type | L2 Distance | Status |\n")
+                    f.write("|----------------|-------------|--------|\n")
+
+                    for comp_name, comp_data in det_mode_comps.items():
+                        precision_type = comp_name.split(' ')[0]
+                        l2_mean_str = comp_data.get('l2_distance', {}).get('mean', '0')
+                        try:
+                            l2_mean = float(l2_mean_str.replace('e-', 'E-').replace('e+', 'E+'))
+                            status = "⚠️ Identical" if l2_mean == 0 else "✅ Different"
+                            f.write(f"| {precision_type} | {l2_mean:.2e} | {status} |\n")
+                        except (ValueError, TypeError):
+                            f.write(f"| {precision_type} | {l2_mean_str} | ❓ Unknown |\n")
+                    f.write("\n")
+
+            # Cross Analysis
+            cross_analysis = analysis.get('cross_analysis', {})
+            if cross_analysis:
+                f.write("## 🔗 Cross-Validation Analysis\n\n")
+
+                consistency = cross_analysis.get('consistency_check', {})
+                if consistency:
+                    zero_diff = consistency.get('zero_diff_precision_comparisons', 0)
+                    total = consistency.get('total_precision_comparisons', 0)
+                    percentage = consistency.get('percentage_zero_diff', 0)
+
+                    f.write(f"**Consistency Check**: {zero_diff}/{total} comparisons show zero differences ({percentage:.1f}%)\n")
+                    f.write(f"**Validation Status**: {cross_analysis.get('validation_status', 'Unknown')}\n\n")
+
+            # Recommendations
+            recommendations = analysis.get('recommendations', [])
+            if recommendations:
+                f.write("## 💡 Recommendations\n\n")
+                for rec in recommendations:
+                    f.write(f"- {rec}\n")
+                f.write("\n")
+
+            f.write("---\n")
+            f.write("*Report generated by EmbeddingUncertaintyAnalyzer*\n")
+
+        print(f"📄 Generated report: {report_file}")
+
+    def run_analysis(self):
+        """Run complete analysis pipeline"""
+        print("🚀 Starting Embedding Uncertainty Analysis")
+        print("=" * 60)
+
+        # Load data
+        repro_loaded = self.load_embedding_reproducibility_results()
+        precision_loaded = self.parse_precision_comparison_report()
+
+        if not repro_loaded and not precision_loaded:
+            print("❌ No data sources loaded. Please ensure results files exist.")
+            return False
+
+        if not repro_loaded:
+            print("⚠️ Proceeding with precision data only")
+        if not precision_loaded:
+            print("⚠️ Proceeding with reproducibility data only")
+
+        # Generate analysis
+        analysis = self.generate_comprehensive_analysis()
+
+        # Save results
+        self.save_analysis_results(analysis)
+
+        print("\n" + "=" * 60)
+        print("✅ Analysis Complete!")
+
+        # Print key findings
+        summary = analysis.get('summary_findings', {})
+        key_findings = summary.get('key_findings', [])
+        if key_findings:
+            print("\n🎯 Key Findings:")
+            for finding in key_findings[:5]:  # Show top 5 findings
+                print(f"  {finding}")
+
+        recommendations = analysis.get('recommendations', [])
+        if recommendations:
+            print("\n💡 Top Recommendations:")
+            for rec in recommendations[:3]:  # Show top 3 recommendations
+                print(f"  {rec}")
+
+        print(f"\n📁 Results saved to: {self.analyze_dir}")
+        return True
+
+
+def main():
+    """Main function to run the analysis"""
+    analyzer = EmbeddingUncertaintyAnalyzer("results")
+    success = analyzer.run_analysis()
+
+    if success:
+        print("\n🎉 Analysis completed successfully!")
+        print("Check the 'results/analyze/' directory for detailed results.")
+    else:
+        print("\n❌ Analysis failed. Please check the error messages above.")
+
+
+if __name__ == "__main__":
+    main()
