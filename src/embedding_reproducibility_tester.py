@@ -88,10 +88,17 @@ class EmbeddingReproducibilityTester:
                 torch.backends.cudnn.deterministic = True
                 torch.backends.cudnn.benchmark = False
         else:
-            # Non-deterministic mode for faster performance
+            # Non-deterministic mode - use different random seeds for true variability
+            import random
+            # Use time-based seeds for non-deterministic behavior
+            time_seed = int(time.time() * 1000000) % (2**32)
+            torch.manual_seed(time_seed)
+            np.random.seed(time_seed)
             if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(time_seed)
                 torch.backends.cudnn.deterministic = False
                 torch.backends.cudnn.benchmark = True
+            logger.info(f"Non-deterministic mode: using time-based seed {time_seed}")
 
         # Setup precision
         if self.config.precision == "fp16":
@@ -109,33 +116,35 @@ class EmbeddingReproducibilityTester:
             # Note: CPU BF16 support depends on hardware (Intel Ice Lake+, some ARM CPUs)
 
     def _load_model(self):
-        """Load sentence transformer model"""
-        if self.model is None:
-            # Check if model path exists for local models
-            if os.path.exists(self.config.model_name):
-                logger.info(f"Loading local model from: {self.config.model_name}")
-            else:
-                logger.warning(f"Local model path not found: {self.config.model_name}")
-                logger.info("Will attempt to load as Hugging Face model name (requires internet)")
+        """Load sentence transformer model - always reload to ensure fresh state for each configuration"""
+        # Always reload model to ensure fresh random state for each configuration
+        # This prevents model state persistence across different precision/deterministic configs
 
+        # Check if model path exists for local models
+        if os.path.exists(self.config.model_name):
+            logger.info(f"Loading local model from: {self.config.model_name}")
+        else:
+            logger.warning(f"Local model path not found: {self.config.model_name}")
+            logger.info("Will attempt to load as Hugging Face model name (requires internet)")
+
+        try:
+            self.model = SentenceTransformer(self.config.model_name, device=self.device)
+            logger.info(f"Model loaded successfully on device: {self.device} (precision: {self.config.precision}, deterministic: {self.config.deterministic})")
+        except Exception as e:
+            logger.error(f"Failed to load model from {self.config.model_name}: {e}")
+            raise
+
+        # Apply precision settings
+        if self.config.precision == "fp16":
+            self.model = self.model.half()
+        elif self.config.precision == "bf16":
+            # BF16 is supported on both modern CPUs and GPUs
             try:
-                self.model = SentenceTransformer(self.config.model_name, device=self.device)
-                logger.info(f"Model loaded successfully on device: {self.device}")
+                self.model = self.model.to(torch.bfloat16)
+                logger.info(f"BF16 precision enabled on {self.device}")
             except Exception as e:
-                logger.error(f"Failed to load model from {self.config.model_name}: {e}")
-                raise
-
-            # Apply precision settings
-            if self.config.precision == "fp16":
-                self.model = self.model.half()
-            elif self.config.precision == "bf16":
-                # BF16 is supported on both modern CPUs and GPUs
-                try:
-                    self.model = self.model.to(torch.bfloat16)
-                    logger.info(f"BF16 precision enabled on {self.device}")
-                except Exception as e:
-                    logger.warning(f"BF16 not supported on {self.device}, falling back to FP32: {e}")
-                    # Keep model in default precision
+                logger.warning(f"BF16 not supported on {self.device}, falling back to FP32: {e}")
+                # Keep model in default precision
 
     def encode_texts(self, texts: List[str]) -> np.ndarray:
         """Encode texts with current configuration"""

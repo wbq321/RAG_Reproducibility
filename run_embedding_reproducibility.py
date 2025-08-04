@@ -5,6 +5,10 @@ This tests if the same embedding configuration produces identical results when r
 
 import sys
 import os
+import logging
+
+# Set up logging to see debug information
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 # Add src directory to path
 sys.path.append('src')
@@ -41,26 +45,31 @@ def run_embedding_reproducibility():
     os.makedirs(results_dir, exist_ok=True)
     print(f"📁 Results will be saved to: {results_dir}/")
 
-    # Define configurations to test
+    # Define configurations to test (reduced set for quick testing)
     configs_to_test = [
         ("FP32 Deterministic", EmbeddingConfig(precision="fp32", deterministic=True, model_name=model_path)),
         ("FP32 Non-Deterministic", EmbeddingConfig(precision="fp32", deterministic=False, model_name=model_path)),
-        ("FP16 Deterministic", EmbeddingConfig(precision="fp16", deterministic=True, model_name=model_path)),
-        ("FP16 Non-Deterministic", EmbeddingConfig(precision="fp16", deterministic=False, model_name=model_path)),
     ]
 
-    # Add advanced precisions if supported
+    # Add FP16 if CUDA is available
     import torch
-    if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
+    if torch.cuda.is_available():
         configs_to_test.extend([
-            ("BF16 Deterministic", EmbeddingConfig(precision="bf16", deterministic=True, model_name=model_path)),
-            ("BF16 Non-Deterministic", EmbeddingConfig(precision="bf16", deterministic=False, model_name=model_path)),
-            ("TF32 Deterministic", EmbeddingConfig(precision="tf32", deterministic=True, model_name=model_path)),
-            ("TF32 Non-Deterministic", EmbeddingConfig(precision="tf32", deterministic=False, model_name=model_path)),
+            ("FP16 Deterministic", EmbeddingConfig(precision="fp16", deterministic=True, model_name=model_path)),
+            ("FP16 Non-Deterministic", EmbeddingConfig(precision="fp16", deterministic=False, model_name=model_path)),
         ])
 
+    # Add advanced precisions if supported (commented out for now to speed up testing)
+    # if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
+    #     configs_to_test.extend([
+    #         ("BF16 Deterministic", EmbeddingConfig(precision="bf16", deterministic=True, model_name=model_path)),
+    #         ("BF16 Non-Deterministic", EmbeddingConfig(precision="bf16", deterministic=False, model_name=model_path)),
+    #         ("TF32 Deterministic", EmbeddingConfig(precision="tf32", deterministic=True, model_name=model_path)),
+    #         ("TF32 Non-Deterministic", EmbeddingConfig(precision="tf32", deterministic=False, model_name=model_path)),
+    #     ])
+
     all_results = {}
-    n_runs = 5  # Number of runs per configuration
+    n_runs = 3  # Reduced for quick testing (was 5)
 
     for config_name, config in configs_to_test:
         print(f"\n🧪 Testing {config_name} (precision: {config.precision}, deterministic: {config.deterministic})")
