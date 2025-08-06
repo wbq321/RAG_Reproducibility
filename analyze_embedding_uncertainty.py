@@ -12,6 +12,16 @@ from datetime import datetime
 from typing import Dict, Any, List, Tuple
 import numpy as np
 
+# Plotting imports (optional - will work without if not installed)
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
+    PLOTTING_AVAILABLE = True
+except ImportError:
+    PLOTTING_AVAILABLE = False
+    print("⚠️ Plotting libraries not available. Install matplotlib, seaborn, pandas for visualizations.")
+
 
 class NumpyEncoder(json.JSONEncoder):
     """Custom JSON encoder for NumPy types"""
@@ -225,11 +235,24 @@ class EmbeddingUncertaintyAnalyzer:
         det_vs_nondet = {}
 
         for comp_name, comp_data in comparisons.items():
+            # Check if this is a within-precision deterministic vs non-deterministic comparison
+            # These should have the same precision type on both sides (e.g., "FP32 DETERMINISTIC VS FP32 NONDETERMINISTIC")
             if 'DETERMINISTIC VS' in comp_name and 'NONDETERMINISTIC' in comp_name:
-                # Within-precision deterministic vs non-deterministic
-                det_vs_nondet[comp_name] = comp_data
-            elif ('DETERMINISTIC VS' in comp_name and 'DETERMINISTIC' in comp_name.split('VS')[1]) or \
-                 ('NONDETERMINISTIC VS' in comp_name and 'NONDETERMINISTIC' in comp_name.split('VS')[1]):
+                parts = comp_name.split(' VS ')
+                if len(parts) == 2:
+                    left_precision = parts[0].split()[0]  # e.g., "FP32" from "FP32 DETERMINISTIC"
+                    right_precision = parts[1].split()[0]  # e.g., "FP32" from "FP32 NONDETERMINISTIC"
+                    if left_precision == right_precision:
+                        # Same precision type, deterministic vs non-deterministic
+                        det_vs_nondet[comp_name] = comp_data
+                    else:
+                        # Different precision types, this is cross-precision
+                        cross_precision[comp_name] = comp_data
+                else:
+                    # Fallback: if we can't parse properly, treat as det vs nondet
+                    det_vs_nondet[comp_name] = comp_data
+            elif ('DETERMINISTIC VS' in comp_name and 'DETERMINISTIC' in comp_name.split(' VS ')[1]) or \
+                 ('NONDETERMINISTIC VS' in comp_name and 'NONDETERMINISTIC' in comp_name.split(' VS ')[1]):
                 # Cross-precision comparisons (same deterministic mode)
                 cross_precision[comp_name] = comp_data
 
@@ -473,20 +496,27 @@ class EmbeddingUncertaintyAnalyzer:
                 l2_mean = float(l2_mean_str.replace('e-', 'E-').replace('e+', 'E+'))
 
                 # Determine if this is deterministic or non-deterministic comparison
-                if 'DETERMINISTIC VS' in comp_name and 'NONDETERMINISTIC' not in comp_name:
-                    # Both sides are deterministic
-                    det_cross_precision[comp_name] = {
-                        'l2_distance': l2_mean,
-                        'different': l2_mean > 1e-10,
-                        'comparison_type': 'deterministic_cross_precision'
-                    }
-                elif 'NONDETERMINISTIC VS' in comp_name and 'DETERMINISTIC' not in comp_name.split('VS')[1]:
-                    # Both sides are non-deterministic
-                    nondet_cross_precision[comp_name] = {
-                        'l2_distance': l2_mean,
-                        'different': l2_mean > 1e-10,
-                        'comparison_type': 'nondeterministic_cross_precision'
-                    }
+                # Check both sides of the comparison
+                parts = comp_name.split(' VS ')
+                if len(parts) == 2:
+                    left_part = parts[0].strip()
+                    right_part = parts[1].strip()
+
+                    # Check for non-deterministic first (since NONDETERMINISTIC contains DETERMINISTIC)
+                    if 'NONDETERMINISTIC' in left_part and 'NONDETERMINISTIC' in right_part:
+                        # Both sides are non-deterministic
+                        nondet_cross_precision[comp_name] = {
+                            'l2_distance': l2_mean,
+                            'different': l2_mean > 1e-10,
+                            'comparison_type': 'nondeterministic_cross_precision'
+                        }
+                    elif 'DETERMINISTIC' in left_part and 'DETERMINISTIC' in right_part and 'NONDETERMINISTIC' not in left_part and 'NONDETERMINISTIC' not in right_part:
+                        # Both sides are deterministic (and not non-deterministic)
+                        det_cross_precision[comp_name] = {
+                            'l2_distance': l2_mean,
+                            'different': l2_mean > 1e-10,
+                            'comparison_type': 'deterministic_cross_precision'
+                        }
             except (ValueError, TypeError):
                 continue
 
@@ -889,6 +919,252 @@ class EmbeddingUncertaintyAnalyzer:
 
         print(f"📄 Generated report: {report_file}")
 
+    def generate_precision_heatmaps(self, analysis: Dict[str, Any]):
+        """Generate separate heatmaps for deterministic and non-deterministic cross-precision comparisons"""
+        if not PLOTTING_AVAILABLE:
+            print("⚠️ Skipping heatmap generation - plotting libraries not available")
+            return
+
+        try:
+            print("🎨 Generating precision comparison heatmaps...")
+
+            # Extract precision analysis data
+            precision_analysis = analysis.get('precision_analysis', {})
+            cross_precision = precision_analysis.get('cross_precision_comparisons', {})
+
+            if not cross_precision:
+                print("⚠️ No cross-precision comparison data found for heatmaps")
+                return
+
+            # Define precision types
+            precisions = ['FP32', 'FP16', 'BF16', 'TF32']
+
+            # Extract deterministic and non-deterministic data
+            det_data = {}
+            nondet_data = {}
+
+            for comp_name, comp_data in cross_precision.items():
+                l2_data = comp_data.get('l2_distance', {})
+                l2_mean_str = l2_data.get('mean', '0')
+
+                try:
+                    # Handle both string and float types
+                    if isinstance(l2_mean_str, str):
+                        l2_mean = float(l2_mean_str.replace('e-', 'E-').replace('e+', 'E+'))
+                    else:
+                        l2_mean = float(l2_mean_str)
+
+                    # Parse comparison name to extract precision types
+                    parts = comp_name.split(' VS ')
+                    if len(parts) == 2:
+                        left_part = parts[0].strip()
+                        right_part = parts[1].strip()
+
+                        # Extract precision types
+                        left_precision = left_part.split()[0]
+                        right_precision = right_part.split()[0]
+
+                        # Determine if deterministic or non-deterministic
+                        # Check for non-deterministic first (since NONDETERMINISTIC contains DETERMINISTIC)
+                        if 'NONDETERMINISTIC' in left_part and 'NONDETERMINISTIC' in right_part:
+                            # Both non-deterministic
+                            nondet_data[(left_precision, right_precision)] = l2_mean
+                        elif 'DETERMINISTIC' in left_part and 'DETERMINISTIC' in right_part and 'NONDETERMINISTIC' not in left_part and 'NONDETERMINISTIC' not in right_part:
+                            # Both deterministic (and not non-deterministic)
+                            det_data[(left_precision, right_precision)] = l2_mean
+
+                except (ValueError, TypeError) as e:
+                    print(f"⚠️ Error parsing L2 distance for {comp_name}: {e}")
+                    continue
+
+            # Create symmetric matrices
+            def create_distance_matrix(data, precisions):
+                n = len(precisions)
+                matrix = np.zeros((n, n))
+
+                # Fill matrix with data
+                for (p1, p2), distance in data.items():
+                    if p1 in precisions and p2 in precisions:
+                        i = precisions.index(p1)
+                        j = precisions.index(p2)
+                        matrix[i, j] = distance
+                        matrix[j, i] = distance  # Make symmetric
+
+                return matrix
+
+            det_matrix = create_distance_matrix(det_data, precisions)
+            nondet_matrix = create_distance_matrix(nondet_data, precisions)
+
+            # Check if we have data
+            if det_matrix.max() == 0 and nondet_matrix.max() == 0:
+                print("⚠️ No valid precision comparison data found for heatmaps")
+                return
+
+            # Common color map settings
+            vmin = 0
+            vmax = max(det_matrix.max(), nondet_matrix.max()) if det_matrix.max() > 0 or nondet_matrix.max() > 0 else 1e-3
+
+            # Create deterministic heatmap
+            if det_matrix.max() > 0:
+                plt.figure(figsize=(10, 8))
+
+                # Create heatmap with seaborn for better styling
+                det_df = pd.DataFrame(det_matrix, index=precisions, columns=precisions)
+
+                # Custom annotations - only show non-zero values
+                annot_matrix = np.zeros_like(det_matrix, dtype=object)
+                for i in range(len(precisions)):
+                    for j in range(len(precisions)):
+                        if i == j:
+                            annot_matrix[i, j] = '0.00e+00'
+                        elif det_matrix[i, j] > 0:
+                            annot_matrix[i, j] = f'{det_matrix[i, j]:.2e}'
+                        else:
+                            annot_matrix[i, j] = ''
+
+                sns.heatmap(det_df, annot=annot_matrix, fmt='', cmap='YlOrRd',
+                           square=True, linewidths=0.5, cbar_kws={'label': 'L2 Distance'},
+                           annot_kws={'fontsize': 16, 'fontweight': 'bold'},
+                           vmin=vmin, vmax=vmax)
+
+                plt.title('Deterministic Cross-Precision Comparisons\n(L2 Distance)',
+                         fontsize=22, fontweight='bold', pad=20)
+                plt.xlabel('Precision Type', fontsize=22, fontweight='bold')
+                plt.ylabel('Precision Type', fontsize=22, fontweight='bold')
+
+                # Make axis tick labels larger and bold
+                plt.xticks(fontsize=22, fontweight='bold')
+                plt.yticks(fontsize=22, fontweight='bold')
+
+                # Make colorbar labels larger and bold
+                cbar = plt.gca().collections[0].colorbar
+                cbar.ax.tick_params(labelsize=14)
+                cbar.set_label('L2 Distance', fontsize=2, fontweight='bold')
+
+                plt.tight_layout()
+
+                # Save deterministic heatmap
+                det_output_path = self.analyze_dir / 'deterministic_precision_heatmap.png'
+                plt.savefig(det_output_path, dpi=300, bbox_inches='tight', facecolor='white')
+                plt.close()
+
+                print(f"📊 Deterministic heatmap saved to: {det_output_path}")
+
+            # Create non-deterministic heatmap
+            if nondet_matrix.max() > 0:
+                plt.figure(figsize=(10, 8))
+
+                # Create heatmap with seaborn for better styling
+                nondet_df = pd.DataFrame(nondet_matrix, index=precisions, columns=precisions)
+
+                # Custom annotations - only show non-zero values
+                annot_matrix = np.zeros_like(nondet_matrix, dtype=object)
+                for i in range(len(precisions)):
+                    for j in range(len(precisions)):
+                        if i == j:
+                            annot_matrix[i, j] = '0.00e+00'
+                        elif nondet_matrix[i, j] > 0:
+                            annot_matrix[i, j] = f'{nondet_matrix[i, j]:.2e}'
+                        else:
+                            annot_matrix[i, j] = ''
+
+                sns.heatmap(nondet_df, annot=annot_matrix, fmt='', cmap='YlOrRd',
+                           square=True, linewidths=0.5, cbar_kws={'label': 'L2 Distance'},
+                           annot_kws={'fontsize': 16, 'fontweight': 'bold'},
+                           vmin=vmin, vmax=vmax)
+
+                plt.title('Non-Deterministic Cross-Precision Comparisons\n(L2 Distance)',
+                         fontsize=18, fontweight='bold', pad=20)
+                plt.xlabel('Precision Type', fontsize=16, fontweight='bold')
+                plt.ylabel('Precision Type', fontsize=16, fontweight='bold')
+
+                # Make axis tick labels larger and bold
+                plt.xticks(fontsize=16, fontweight='bold')
+                plt.yticks(fontsize=16, fontweight='bold')
+
+                # Make colorbar labels larger and bold
+                cbar = plt.gca().collections[0].colorbar
+                cbar.ax.tick_params(labelsize=12)
+                cbar.set_label('L2 Distance', fontsize=16, fontweight='bold')
+
+                plt.tight_layout()
+
+                # Save non-deterministic heatmap
+                nondet_output_path = self.analyze_dir / 'nondeterministic_precision_heatmap.png'
+                plt.savefig(nondet_output_path, dpi=300, bbox_inches='tight', facecolor='white')
+                plt.close()
+
+                print(f"📊 Non-deterministic heatmap saved to: {nondet_output_path}")
+
+            # Create a comparison plot if both exist
+            if det_matrix.max() > 0 and nondet_matrix.max() > 0:
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
+
+                # Deterministic subplot
+                det_df = pd.DataFrame(det_matrix, index=precisions, columns=precisions)
+                annot_matrix_det = np.zeros_like(det_matrix, dtype=object)
+                for i in range(len(precisions)):
+                    for j in range(len(precisions)):
+                        if i == j:
+                            annot_matrix_det[i, j] = '0.00e+00'
+                        elif det_matrix[i, j] > 0:
+                            annot_matrix_det[i, j] = f'{det_matrix[i, j]:.2e}'
+                        else:
+                            annot_matrix_det[i, j] = ''
+
+                sns.heatmap(det_df, annot=annot_matrix_det, fmt='', cmap='YlOrRd',
+                           square=True, linewidths=0.5, ax=ax1, cbar=False,
+                           annot_kws={'fontsize': 10, 'fontweight': 'bold'},
+                           vmin=vmin, vmax=vmax)
+                ax1.set_title('Deterministic Mode', fontsize=14, fontweight='bold')
+                ax1.set_xlabel('Precision Type', fontsize=12)
+                ax1.set_ylabel('Precision Type', fontsize=12)
+
+                # Non-deterministic subplot
+                nondet_df = pd.DataFrame(nondet_matrix, index=precisions, columns=precisions)
+                annot_matrix_nondet = np.zeros_like(nondet_matrix, dtype=object)
+                for i in range(len(precisions)):
+                    for j in range(len(precisions)):
+                        if i == j:
+                            annot_matrix_nondet[i, j] = '0.00e+00'
+                        elif nondet_matrix[i, j] > 0:
+                            annot_matrix_nondet[i, j] = f'{nondet_matrix[i, j]:.2e}'
+                        else:
+                            annot_matrix_nondet[i, j] = ''
+
+                im = sns.heatmap(nondet_df, annot=annot_matrix_nondet, fmt='', cmap='YlOrRd',
+                               square=True, linewidths=0.5, ax=ax2,
+                               annot_kws={'fontsize': 10, 'fontweight': 'bold'},
+                               vmin=vmin, vmax=vmax)
+                ax2.set_title('Non-Deterministic Mode', fontsize=14, fontweight='bold')
+                ax2.set_xlabel('Precision Type', fontsize=12)
+                ax2.set_ylabel('Precision Type', fontsize=12)
+
+                # Add shared colorbar
+                cbar = plt.colorbar(im.collections[0], ax=[ax1, ax2], shrink=0.8, aspect=30)
+                cbar.set_label('L2 Distance', rotation=270, labelpad=20, fontsize=12)
+
+                plt.suptitle('Cross-Precision Comparison: Deterministic vs Non-Deterministic',
+                            fontsize=16, fontweight='bold', y=1.02)
+                plt.tight_layout()
+
+                # Save comparison plot
+                comparison_output_path = self.analyze_dir / 'precision_comparison_side_by_side.png'
+                plt.savefig(comparison_output_path, dpi=300, bbox_inches='tight', facecolor='white')
+                plt.close()
+
+                print(f"📊 Side-by-side comparison saved to: {comparison_output_path}")
+
+                # Check if they are identical
+                if np.allclose(det_matrix, nondet_matrix, atol=1e-10):
+                    print("⚠️ CRITICAL: Deterministic and non-deterministic modes produce identical results!")
+                    print("   This suggests the non-deterministic mode is not working as expected.")
+
+        except Exception as e:
+            print(f"❌ Error generating heatmaps: {e}")
+            import traceback
+            traceback.print_exc()
+
     def run_analysis(self):
         """Run complete analysis pipeline"""
         print("🚀 Starting Embedding Uncertainty Analysis")
@@ -912,6 +1188,9 @@ class EmbeddingUncertaintyAnalyzer:
 
         # Save results
         self.save_analysis_results(analysis)
+
+        # Generate heatmaps for precision comparisons
+        self.generate_precision_heatmaps(analysis)
 
         print("\n" + "=" * 60)
         print("✅ Analysis Complete!")
