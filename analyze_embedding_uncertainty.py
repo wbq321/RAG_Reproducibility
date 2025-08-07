@@ -18,6 +18,29 @@ try:
     import seaborn as sns
     import pandas as pd
     PLOTTING_AVAILABLE = True
+
+    # Set publication-quality plot parameters
+    plt.rcParams.update({
+        'font.size': 30,
+        'font.weight': 'bold',
+        'axes.titlesize': 30,
+        'axes.labelsize': 30,
+        'xtick.labelsize': 30,
+        'ytick.labelsize': 30,
+        'legend.fontsize': 30,
+        'figure.titlesize': 30,
+        'lines.linewidth': 2,
+        'axes.linewidth': 2,
+        'xtick.major.width': 2,
+        'ytick.major.width': 2,
+        'axes.spines.top': False,
+        'axes.spines.right': False,
+        'figure.dpi': 300,
+        'savefig.dpi': 300,
+        'savefig.bbox': 'tight',
+        'savefig.facecolor': 'white'
+    })
+
 except ImportError:
     PLOTTING_AVAILABLE = False
     print("⚠️ Plotting libraries not available. Install matplotlib, seaborn, pandas for visualizations.")
@@ -37,7 +60,7 @@ class NumpyEncoder(json.JSONEncoder):
         return super(NumpyEncoder, self).default(obj)
 
 class EmbeddingUncertaintyAnalyzer:
-    def __init__(self, results_dir="results"):
+    def __init__(self, results_dir="results/bge"):
         self.results_dir = Path(results_dir)
         self.analyze_dir = self.results_dir / "analyze"
         self.analyze_dir.mkdir(exist_ok=True)
@@ -47,19 +70,29 @@ class EmbeddingUncertaintyAnalyzer:
 
     def load_embedding_reproducibility_results(self):
         """Load embedding reproducibility results"""
-        repro_file = self.results_dir / "embedding_reproducibility_results.json"
-        if repro_file.exists():
-            try:
-                with open(repro_file, 'r', encoding='utf-8') as f:
-                    self.reproducibility_data = json.load(f)
-                print(f"✅ Loaded embedding reproducibility results")
-                return True
-            except Exception as e:
-                print(f"❌ Error loading embedding reproducibility results: {e}")
-                return False
-        else:
-            print(f"❌ Embedding reproducibility results file not found: {repro_file}")
-            return False
+        # Try different possible filenames (new format with model name, old format)
+        possible_files = [
+            "embedding_reproducibility_results_bge.json",
+            "embedding_reproducibility_results_e5.json",
+            "embedding_reproducibility_results_qw.json",
+            "embedding_reproducibility_results.json"  # Fallback to old format
+        ]
+
+        for filename in possible_files:
+            repro_file = self.results_dir / filename
+            if repro_file.exists():
+                try:
+                    with open(repro_file, 'r', encoding='utf-8') as f:
+                        self.reproducibility_data = json.load(f)
+                    print(f"✅ Loaded embedding reproducibility results from {filename}")
+                    return True
+                except Exception as e:
+                    print(f"❌ Error loading {filename}: {e}")
+                    continue
+
+        print(f"❌ No embedding reproducibility results found in: {self.results_dir}")
+        print(f"   Looked for: {', '.join(possible_files)}")
+        return False
 
     def parse_precision_comparison_report(self):
         """Parse the precision comparison markdown report"""
@@ -1006,7 +1039,7 @@ class EmbeddingUncertaintyAnalyzer:
 
             # Create deterministic heatmap
             if det_matrix.max() > 0:
-                plt.figure(figsize=(10, 8))
+                plt.figure(figsize=(18, 16))
 
                 # Create heatmap with seaborn for better styling
                 det_df = pd.DataFrame(det_matrix, index=precisions, columns=precisions)
@@ -1024,22 +1057,22 @@ class EmbeddingUncertaintyAnalyzer:
 
                 sns.heatmap(det_df, annot=annot_matrix, fmt='', cmap='YlOrRd',
                            square=True, linewidths=0.5, cbar_kws={'label': 'L2 Distance'},
-                           annot_kws={'fontsize': 16, 'fontweight': 'bold'},
+                           annot_kws={'fontsize': 30, 'fontweight': 'bold'},
                            vmin=vmin, vmax=vmax)
 
                 plt.title('Deterministic Cross-Precision Comparisons\n(L2 Distance)',
-                         fontsize=22, fontweight='bold', pad=20)
-                plt.xlabel('Precision Type', fontsize=22, fontweight='bold')
-                plt.ylabel('Precision Type', fontsize=22, fontweight='bold')
+                         fontsize=30, fontweight='bold', pad=40)
+                plt.xlabel('Precision Type', fontsize=30, fontweight='bold')
+                plt.ylabel('Precision Type', fontsize=30, fontweight='bold')
 
                 # Make axis tick labels larger and bold
-                plt.xticks(fontsize=22, fontweight='bold')
-                plt.yticks(fontsize=22, fontweight='bold')
+                plt.xticks(fontsize=30, fontweight='bold')
+                plt.yticks(fontsize=30, fontweight='bold')
 
                 # Make colorbar labels larger and bold
                 cbar = plt.gca().collections[0].colorbar
-                cbar.ax.tick_params(labelsize=14)
-                cbar.set_label('L2 Distance', fontsize=2, fontweight='bold')
+                cbar.ax.tick_params(labelsize=30)
+                cbar.set_label('L2 Distance', fontsize=30, fontweight='bold')
 
                 plt.tight_layout()
 
@@ -1052,7 +1085,7 @@ class EmbeddingUncertaintyAnalyzer:
 
             # Create non-deterministic heatmap
             if nondet_matrix.max() > 0:
-                plt.figure(figsize=(10, 8))
+                plt.figure(figsize=(18, 16))
 
                 # Create heatmap with seaborn for better styling
                 nondet_df = pd.DataFrame(nondet_matrix, index=precisions, columns=precisions)
@@ -1070,22 +1103,22 @@ class EmbeddingUncertaintyAnalyzer:
 
                 sns.heatmap(nondet_df, annot=annot_matrix, fmt='', cmap='YlOrRd',
                            square=True, linewidths=0.5, cbar_kws={'label': 'L2 Distance'},
-                           annot_kws={'fontsize': 16, 'fontweight': 'bold'},
+                           annot_kws={'fontsize': 30, 'fontweight': 'bold'},
                            vmin=vmin, vmax=vmax)
 
                 plt.title('Non-Deterministic Cross-Precision Comparisons\n(L2 Distance)',
-                         fontsize=18, fontweight='bold', pad=20)
-                plt.xlabel('Precision Type', fontsize=16, fontweight='bold')
-                plt.ylabel('Precision Type', fontsize=16, fontweight='bold')
+                         fontsize=30, fontweight='bold', pad=40)
+                plt.xlabel('Precision Type', fontsize=30, fontweight='bold')
+                plt.ylabel('Precision Type', fontsize=30, fontweight='bold')
 
                 # Make axis tick labels larger and bold
-                plt.xticks(fontsize=16, fontweight='bold')
-                plt.yticks(fontsize=16, fontweight='bold')
+                plt.xticks(fontsize=30, fontweight='bold')
+                plt.yticks(fontsize=30, fontweight='bold')
 
                 # Make colorbar labels larger and bold
                 cbar = plt.gca().collections[0].colorbar
-                cbar.ax.tick_params(labelsize=12)
-                cbar.set_label('L2 Distance', fontsize=16, fontweight='bold')
+                cbar.ax.tick_params(labelsize=30)
+                cbar.set_label('L2 Distance', fontsize=30, fontweight='bold')
 
                 plt.tight_layout()
 
@@ -1098,7 +1131,7 @@ class EmbeddingUncertaintyAnalyzer:
 
             # Create a comparison plot if both exist
             if det_matrix.max() > 0 and nondet_matrix.max() > 0:
-                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(28, 14))
 
                 # Deterministic subplot
                 det_df = pd.DataFrame(det_matrix, index=precisions, columns=precisions)
@@ -1114,11 +1147,12 @@ class EmbeddingUncertaintyAnalyzer:
 
                 sns.heatmap(det_df, annot=annot_matrix_det, fmt='', cmap='YlOrRd',
                            square=True, linewidths=0.5, ax=ax1, cbar=False,
-                           annot_kws={'fontsize': 10, 'fontweight': 'bold'},
+                           annot_kws={'fontsize': 30, 'fontweight': 'bold'},
                            vmin=vmin, vmax=vmax)
-                ax1.set_title('Deterministic Mode', fontsize=14, fontweight='bold')
-                ax1.set_xlabel('Precision Type', fontsize=12)
-                ax1.set_ylabel('Precision Type', fontsize=12)
+                ax1.set_title('Deterministic Mode', fontsize=30, fontweight='bold')
+                ax1.set_xlabel('Precision Type', fontsize=30, fontweight='bold')
+                ax1.set_ylabel('Precision Type', fontsize=30, fontweight='bold')
+                ax1.tick_params(axis='both', labelsize=30)
 
                 # Non-deterministic subplot
                 nondet_df = pd.DataFrame(nondet_matrix, index=precisions, columns=precisions)
@@ -1134,18 +1168,20 @@ class EmbeddingUncertaintyAnalyzer:
 
                 im = sns.heatmap(nondet_df, annot=annot_matrix_nondet, fmt='', cmap='YlOrRd',
                                square=True, linewidths=0.5, ax=ax2,
-                               annot_kws={'fontsize': 10, 'fontweight': 'bold'},
+                               annot_kws={'fontsize': 30, 'fontweight': 'bold'},
                                vmin=vmin, vmax=vmax)
-                ax2.set_title('Non-Deterministic Mode', fontsize=14, fontweight='bold')
-                ax2.set_xlabel('Precision Type', fontsize=12)
-                ax2.set_ylabel('Precision Type', fontsize=12)
+                ax2.set_title('Non-Deterministic Mode', fontsize=30, fontweight='bold')
+                ax2.set_xlabel('Precision Type', fontsize=30, fontweight='bold')
+                ax2.set_ylabel('Precision Type', fontsize=30, fontweight='bold')
+                ax2.tick_params(axis='both', labelsize=30)
 
                 # Add shared colorbar
                 cbar = plt.colorbar(im.collections[0], ax=[ax1, ax2], shrink=0.8, aspect=30)
-                cbar.set_label('L2 Distance', rotation=270, labelpad=20, fontsize=12)
+                cbar.set_label('L2 Distance', rotation=270, labelpad=35, fontsize=30, fontweight='bold')
+                cbar.ax.tick_params(labelsize=30)
 
                 plt.suptitle('Cross-Precision Comparison: Deterministic vs Non-Deterministic',
-                            fontsize=16, fontweight='bold', y=1.02)
+                            fontsize=30, fontweight='bold', y=1.02)
                 plt.tight_layout()
 
                 # Save comparison plot
@@ -1207,8 +1243,8 @@ class EmbeddingUncertaintyAnalyzer:
                 print("⚠️ No timing data found in reproducibility results")
                 return
 
-            # Create simple mean execution time plot
-            fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+            # Create simple mean execution time plot with larger figure size
+            fig, ax = plt.subplots(1, 1, figsize=(20, 16))
 
             # Prepare data
             configs = list(timing_data.keys())
@@ -1231,13 +1267,13 @@ class EmbeddingUncertaintyAnalyzer:
 
             # Create bar chart
             bars = ax.bar(range(len(configs)), mean_times, yerr=std_times,
-                         capsize=8, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+                         capsize=10, color=colors, alpha=0.8, edgecolor='black', linewidth=2)
 
-            # Formatting
-            ax.set_xlabel('Configuration', fontsize=16, fontweight='bold')
-            ax.set_ylabel('Mean Execution Time (seconds)', fontsize=16, fontweight='bold')
+            # Formatting with larger fonts for publication
+            ax.set_xlabel('Configuration', fontsize=30, fontweight='bold')
+            ax.set_ylabel('Mean Execution Time (seconds)', fontsize=30, fontweight='bold')
             ax.set_title('Mean Execution Time by Configuration\n(Cold Start Excluded)',
-                        fontsize=18, fontweight='bold', pad=20)
+                        fontsize=30, fontweight='bold', pad=40)
 
             # Clean up configuration names
             clean_names = []
@@ -1246,21 +1282,23 @@ class EmbeddingUncertaintyAnalyzer:
                 clean_names.append(clean_name)
 
             ax.set_xticks(range(len(configs)))
-            ax.set_xticklabels(clean_names, rotation=45, ha='right', fontsize=12)
-            ax.grid(True, alpha=0.3, axis='y')
+            ax.set_xticklabels(clean_names, rotation=45, ha='right', fontsize=30, fontweight='bold')
+            ax.tick_params(axis='y', labelsize=30)
+            ax.tick_params(axis='y', labelsize=20)
+            ax.grid(True, alpha=0.3, axis='y', linewidth=1.5)
 
-            # Add value labels on bars
+            # Add value labels on bars with larger font
             for i, (bar, mean_time, std_time) in enumerate(zip(bars, mean_times, std_times)):
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2., height + std_time + max(mean_times) * 0.02,
                        f'{mean_time:.3f}s', ha='center', va='bottom',
-                       fontsize=11, fontweight='bold')
+                       fontsize=30, fontweight='bold')
 
             # Make plot look clean and professional
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
-            ax.spines['left'].set_linewidth(1.5)
-            ax.spines['bottom'].set_linewidth(1.5)
+            ax.spines['left'].set_linewidth(2)
+            ax.spines['bottom'].set_linewidth(2)
 
             plt.tight_layout()
 
@@ -1388,7 +1426,7 @@ class EmbeddingUncertaintyAnalyzer:
                 return
 
             # Create timing comparison plots
-            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(24, 18))
 
             # 1. Mean execution time comparison
             configs = list(timing_data.keys())
@@ -1673,7 +1711,9 @@ def main():
             return
         elif sys.argv[1] == "--timing-only":
             results_dir = sys.argv[2] if len(sys.argv) > 2 else "results"
-            success = generate_standalone_timing_plot_only(results_dir)
+            # Use the existing timing plot generation
+            analyzer = EmbeddingUncertaintyAnalyzer(results_dir)
+            success = analyzer.plot_timing_analysis()
             if not success:
                 sys.exit(1)
             return

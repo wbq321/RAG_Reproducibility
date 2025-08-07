@@ -1,5 +1,15 @@
 """
-Test embedding reproducibility for the same configuration across multiple runs
+Test embedding reproducibility for the    print("🔬 Starting Embedding Reproducibility Testing")
+    print(f"📍 Model: {model_name} ({model_path})")
+    print(f"🔧 CUBLAS_WORKSPACE_CONFIG set to: {os.environ.get('CUBLAS_WORKSPACE_CONFIG', 'Not set')}")
+    print(f"📝 Testing with fixed sentence for pure reproducibility analysis")
+    print(f"📋 Test sentence: '{test_sentence}'")
+    print("🔄 Testing same config multiple times for reproducibility")
+
+    # Create model-specific results directory
+    results_dir = f"results/{model_name}"
+    os.makedirs(results_dir, exist_ok=True)
+    print(f"📁 Results will be saved to: {results_dir}/")guration across multiple runs
 This tests if the same embedding configuration produces identical results when run multiple times
 """
 
@@ -14,11 +24,17 @@ sys.path.append('src')
 
 from embedding_reproducibility_tester import EmbeddingReproducibilityTester, EmbeddingConfig
 
-def run_embedding_reproducibility():
-    """Test embedding reproducibility within same configurations"""
+def run_embedding_reproducibility(model_name="bge", model_path=None):
+    """Test embedding reproducibility within same configurations
+    
+    Args:
+        model_name (str): Name of the model (bge, e5, qw) for organizing results
+        model_path (str): Path to the model. If None, uses default BGE path
+    """
 
-    # Your model path
-    model_path = "/scratch/user/u.bw269205/shared_models/bge_model"
+    # Default model path if not provided
+    if model_path is None:
+        model_path = "/scratch/user/u.bw269205/shared_models/bge_model"
 
     # Fixed test sentence for pure reproducibility testing
     # Using one consistent sentence to isolate model behavior from text variability
@@ -187,13 +203,14 @@ def run_embedding_reproducibility():
     from datetime import datetime
 
     # Save main results
-    results_file = os.path.join(results_dir, "embedding_reproducibility_results_bge.json")
+    results_file = os.path.join(results_dir, f"embedding_reproducibility_results_{model_name}.json")
     with open(results_file, "w") as f:
         json.dump(all_results, f, indent=2, default=str)
 
     # Save summary analysis
     summary_results = {
         "timestamp": datetime.now().isoformat(),
+        "model_name": model_name,
         "model_path": model_path,
         "test_sentence": test_sentence,  # Record the fixed sentence used
         "n_runs": n_runs,
@@ -224,7 +241,7 @@ def run_embedding_reproducibility():
                 "reproducible": False
             }
 
-    summary_file = os.path.join(results_dir, "embedding_reproducibility_summary_bge.json")
+    summary_file = os.path.join(results_dir, f"embedding_reproducibility_summary_{model_name}.json")
     with open(summary_file, "w") as f:
         json.dump(summary_results, f, indent=2, default=str)
 
@@ -234,4 +251,10 @@ def run_embedding_reproducibility():
     return all_results
 
 if __name__ == "__main__":
-    run_embedding_reproducibility()
+    # You can modify this to test different models
+    # Examples:
+    # run_embedding_reproducibility("bge", "/path/to/bge_model")
+    # run_embedding_reproducibility("e5", "/path/to/e5_model") 
+    # run_embedding_reproducibility("qw", "/path/to/qw_model")
+    
+    run_embedding_reproducibility()  # Default: BGE model
