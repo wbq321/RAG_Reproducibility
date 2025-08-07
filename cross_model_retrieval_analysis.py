@@ -40,7 +40,7 @@ if str(src_dir) not in sys.path:
     sys.path.append(str(src_dir))
 
 # Import existing modules
-from embedding_reproducibility_tester import EmbeddingReproducibilityTester
+from embedding_reproducibility_tester import EmbeddingReproducibilityTester, EmbeddingConfig
 from dataset_loader import load_dataset_for_reproducibility
 
 # FAISS for retrieval
@@ -137,7 +137,17 @@ class CrossModelRetrievalAnalyzer:
         self.output_dir.mkdir(exist_ok=True)
         
         # Initialize components
-        self.tester = EmbeddingReproducibilityTester()
+        # Create a default embedding config for the tester
+        default_config = EmbeddingConfig(
+            model_name="bge",  # Default model, will be overridden per model
+            precision="fp32",
+            deterministic=True,
+            device="auto",
+            batch_size=32,
+            max_length=512,
+            normalize_embeddings=True
+        )
+        self.tester = EmbeddingReproducibilityTester(default_config)
         
         # Storage for results
         self.documents = []
@@ -211,23 +221,24 @@ class CrossModelRetrievalAnalyzer:
             logger.info(f"Generating embeddings with {model_name}...")
             start_time = time.time()
             
-            # Configure model with FP32 precision
-            model_config = {
-                "model_name": model_name,
-                "precision": "fp32",  # Fixed precision for consistency
-                "max_length": 512,
-                "batch_size": 32,
-                "device": "auto"
-            }
-            
-            # Generate embeddings using existing infrastructure
-            embeddings = self.tester.generate_embeddings_batch(
-                texts=doc_texts,
+            # Create model-specific config
+            model_config = EmbeddingConfig(
                 model_name=model_name,
-                precision="fp32"
+                precision="fp32",  # Fixed precision for consistency
+                deterministic=True,
+                device="auto",
+                batch_size=32,
+                max_length=512,
+                normalize_embeddings=True
             )
             
-            # Ensure FP32 and normalize
+            # Create a new tester instance for this model
+            model_tester = EmbeddingReproducibilityTester(model_config)
+            
+            # Generate embeddings using the tester
+            embeddings = model_tester.encode_texts(doc_texts)
+            
+            # Ensure FP32 and normalize for FAISS
             embeddings = embeddings.astype(np.float32)
             # Normalize for cosine similarity in FAISS
             faiss.normalize_L2(embeddings)
@@ -273,11 +284,22 @@ class CrossModelRetrievalAnalyzer:
         for model_name in self.models_to_test:
             logger.info(f"Generating query embeddings for {model_name}...")
             
-            query_embs = self.tester.generate_embeddings_batch(
-                texts=self.queries,
+            # Create model-specific config
+            model_config = EmbeddingConfig(
                 model_name=model_name,
-                precision="fp32"
+                precision="fp32",  # Fixed precision for consistency
+                deterministic=True,
+                device="auto",
+                batch_size=32,
+                max_length=512,
+                normalize_embeddings=True
             )
+            
+            # Create a new tester instance for this model
+            model_tester = EmbeddingReproducibilityTester(model_config)
+            
+            # Generate query embeddings
+            query_embs = model_tester.encode_texts(self.queries)
             
             # Ensure FP32 and normalize
             query_embs = query_embs.astype(np.float32)
