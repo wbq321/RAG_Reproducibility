@@ -43,6 +43,16 @@ if str(src_dir) not in sys.path:
 from embedding_reproducibility_tester import EmbeddingReproducibilityTester, EmbeddingConfig
 from dataset_loader import load_dataset_for_reproducibility
 
+# PyTorch for device detection
+try:
+    import torch
+    def get_device():
+        return "cuda" if torch.cuda.is_available() else "cpu"
+except ImportError:
+    print("PyTorch not found. Defaulting to CPU.")
+    def get_device():
+        return "cpu"
+
 # FAISS for retrieval
 try:
     import faiss
@@ -142,7 +152,7 @@ class CrossModelRetrievalAnalyzer:
             model_name="bge",  # Default model, will be overridden per model
             precision="fp32",
             deterministic=True,
-            device="auto",
+            device=get_device(),
             batch_size=32,
             max_length=512,
             normalize_embeddings=True
@@ -226,7 +236,7 @@ class CrossModelRetrievalAnalyzer:
                 model_name=model_name,
                 precision="fp32",  # Fixed precision for consistency
                 deterministic=True,
-                device="auto",
+                device=get_device(),
                 batch_size=32,
                 max_length=512,
                 normalize_embeddings=True
@@ -289,7 +299,7 @@ class CrossModelRetrievalAnalyzer:
                 model_name=model_name,
                 precision="fp32",  # Fixed precision for consistency
                 deterministic=True,
-                device="auto",
+                device=get_device(),
                 batch_size=32,
                 max_length=512,
                 normalize_embeddings=True
