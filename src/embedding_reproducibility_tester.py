@@ -87,6 +87,14 @@ class EmbeddingReproducibilityTester:
                 torch.cuda.manual_seed_all(42)
                 torch.backends.cudnn.deterministic = True
                 torch.backends.cudnn.benchmark = False
+
+            # Enable deterministic algorithms for maximum reproducibility
+            try:
+                torch.use_deterministic_algorithms(True)
+                logger.info("Deterministic algorithms enabled for maximum reproducibility")
+            except Exception as e:
+                logger.warning(f"Could not enable deterministic algorithms: {e}")
+                logger.info("Continuing with other deterministic settings")
         else:
             # Non-deterministic mode - use different random seeds for true variability
             import random
@@ -98,6 +106,13 @@ class EmbeddingReproducibilityTester:
                 torch.cuda.manual_seed_all(time_seed)
                 torch.backends.cudnn.deterministic = False
                 torch.backends.cudnn.benchmark = True
+
+            # Disable deterministic algorithms for non-deterministic mode
+            try:
+                torch.use_deterministic_algorithms(False)
+                logger.info("Deterministic algorithms disabled for non-deterministic mode")
+            except Exception as e:
+                logger.warning(f"Could not disable deterministic algorithms: {e}")
             logger.info(f"Non-deterministic mode: using time-based seed {time_seed}")
 
         # Setup precision

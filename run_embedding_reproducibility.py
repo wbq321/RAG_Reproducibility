@@ -17,23 +17,25 @@ def run_embedding_reproducibility():
     # Your model path
     model_path = "/scratch/user/u.bw269205/shared_models/bge_model"
 
-    # Test texts - you can modify these or load from your test datasets
-    test_texts = [
-        "Document about machine learning and artificial intelligence research.",
-        "Natural language processing enables semantic understanding of text.",
-        "Vector embeddings capture meaning in high-dimensional space.",
-        "Transformer models have revolutionized language understanding.",
-        "Reproducibility testing ensures consistent model behavior.",
-        "GPU acceleration improves neural network training speed.",
-        "Different precision formats affect computational accuracy.",
-        "RAG systems combine retrieval with generation capabilities.",
-        "FAISS provides efficient similarity search for embeddings.",
-        "Distributed computing scales machine learning workloads."
-    ]
+    # Fixed test sentence for pure reproducibility testing
+    # Using one consistent sentence to isolate model behavior from text variability
+    test_sentence = '''Recent advances in single-cell RNA sequencing (scRNA-seq) have revolutionized our understanding of cellular heterogeneity in complex tissues.
+
+                This technology allows researchers to profile gene expression at the individual cell level, revealing previously unknown cell types and states.
+
+                The computational challenges include dealing with high-dimensional sparse data, batch effects, and trajectory inference.
+
+                Machine learning methods such as variational autoencoders and graph neural networks are being developed to address these challenges.
+
+                What are the key computational methods for analyzing scRNA-seq data and how do they handle the unique characteristics of this data type?'''
+
+    # Use the same sentence for all reproducibility tests
+    test_texts = [test_sentence]
 
     print("🔬 Starting Embedding Reproducibility Testing")
     print(f"📍 Model: {model_path}")
-    print(f"📝 Testing with {len(test_texts)} sample texts")
+    print(f"📝 Testing with fixed sentence for pure reproducibility analysis")
+    print(f"📋 Test sentence: '{test_sentence}'")
     print("🔄 Testing same config multiple times for reproducibility")
 
     # Create results directory
@@ -189,7 +191,7 @@ def run_embedding_reproducibility():
     summary_results = {
         "timestamp": datetime.now().isoformat(),
         "model_path": model_path,
-        "num_texts": len(test_texts),
+        "test_sentence": test_sentence,  # Record the fixed sentence used
         "n_runs": n_runs,
         "summary": {
             "total_configurations": len(all_results),

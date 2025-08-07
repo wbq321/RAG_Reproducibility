@@ -1165,6 +1165,417 @@ class EmbeddingUncertaintyAnalyzer:
             import traceback
             traceback.print_exc()
 
+    def generate_mean_execution_time_plot(self):
+        """Generate a simple, focused plot showing only mean execution times"""
+        if not PLOTTING_AVAILABLE:
+            print("⚠️ Skipping mean execution time plot - plotting libraries not available")
+            return
+
+        if not self.reproducibility_data:
+            print("⚠️ No reproducibility data available for mean execution time plot")
+            return
+
+        try:
+            print("⏱️ Generating mean execution time plot...")
+
+            # Extract timing data
+            timing_data = {}
+
+            for config_name, config_results in self.reproducibility_data.items():
+                if isinstance(config_results, dict) and 'metrics' in config_results:
+                    if 'timings' in config_results:
+                        raw_timings = config_results['timings']
+                        if len(raw_timings) > 1:
+                            # Exclude first run (cold start)
+                            warm_timings = raw_timings[1:]
+                            mean_duration = np.mean(warm_timings)
+                            std_duration = np.std(warm_timings)
+                            timing_data[config_name] = {
+                                'mean': mean_duration,
+                                'std': std_duration
+                            }
+                        else:
+                            # Use available data
+                            timing_metrics = config_results['metrics'].get('timing', {})
+                            if timing_metrics:
+                                timing_data[config_name] = {
+                                    'mean': timing_metrics.get('mean_duration', 0),
+                                    'std': timing_metrics.get('std_duration', 0)
+                                }
+
+            if not timing_data:
+                print("⚠️ No timing data found in reproducibility results")
+                return
+
+            # Create simple mean execution time plot
+            fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+
+            # Prepare data
+            configs = list(timing_data.keys())
+            mean_times = [timing_data[config]['mean'] for config in configs]
+            std_times = [timing_data[config]['std'] for config in configs]
+
+            # Define colors by precision type
+            colors = []
+            for config in configs:
+                if 'FP32' in config:
+                    colors.append('#1f77b4')  # Blue
+                elif 'FP16' in config:
+                    colors.append('#ff7f0e')  # Orange
+                elif 'BF16' in config:
+                    colors.append('#2ca02c')  # Green
+                elif 'TF32' in config:
+                    colors.append('#d62728')  # Red
+                else:
+                    colors.append('#9467bd')  # Purple
+
+            # Create bar chart
+            bars = ax.bar(range(len(configs)), mean_times, yerr=std_times,
+                         capsize=8, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+
+            # Formatting
+            ax.set_xlabel('Configuration', fontsize=16, fontweight='bold')
+            ax.set_ylabel('Mean Execution Time (seconds)', fontsize=16, fontweight='bold')
+            ax.set_title('Mean Execution Time by Configuration\n(Cold Start Excluded)',
+                        fontsize=18, fontweight='bold', pad=20)
+
+            # Clean up configuration names
+            clean_names = []
+            for config in configs:
+                clean_name = config.replace('_', ' ').replace('Deterministic', 'Det').replace('Non-Deterministic', 'Non-Det')
+                clean_names.append(clean_name)
+
+            ax.set_xticks(range(len(configs)))
+            ax.set_xticklabels(clean_names, rotation=45, ha='right', fontsize=12)
+            ax.grid(True, alpha=0.3, axis='y')
+
+            # Add value labels on bars
+            for i, (bar, mean_time, std_time) in enumerate(zip(bars, mean_times, std_times)):
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height + std_time + max(mean_times) * 0.02,
+                       f'{mean_time:.3f}s', ha='center', va='bottom',
+                       fontsize=11, fontweight='bold')
+
+            # Make plot look clean and professional
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_linewidth(1.5)
+            ax.spines['bottom'].set_linewidth(1.5)
+
+            plt.tight_layout()
+
+            # Save the plot
+            mean_time_plot_path = self.analyze_dir / 'mean_execution_time_plot.png'
+            plt.savefig(mean_time_plot_path, dpi=300, bbox_inches='tight', facecolor='white')
+            plt.close()
+
+            print(f"⏱️ Mean execution time plot saved to: {mean_time_plot_path}")
+
+            # Print simple summary
+            print("\n📊 Mean Execution Time Summary:")
+            print("-" * 40)
+            sorted_configs = sorted(timing_data.items(), key=lambda x: x[1]['mean'])
+            for i, (config, data) in enumerate(sorted_configs, 1):
+                print(f"{i}. {config}: {data['mean']:.3f}s ± {data['std']:.3f}s")
+
+        except Exception as e:
+            print(f"❌ Error generating mean execution time plot: {e}")
+            import traceback
+            traceback.print_exc()
+
+
+    def _generate_performance_summary(self, timing_data: Dict):
+        """Generate a concise performance summary for the standalone plot"""
+        try:
+            print("\n📊 Performance Summary:")
+            print("-" * 50)
+
+            # Sort configurations by performance
+            sorted_configs = sorted(timing_data.items(), key=lambda x: x[1]['mean'])
+
+            # Find fastest and slowest
+            fastest = sorted_configs[0]
+            slowest = sorted_configs[-1]
+
+            print(f"🚀 Fastest: {fastest[0]} - {fastest[1]['mean']:.3f}s ± {fastest[1]['std']:.3f}s")
+            print(f"🐌 Slowest: {slowest[0]} - {slowest[1]['mean']:.3f}s ± {slowest[1]['std']:.3f}s")
+
+            if len(sorted_configs) > 1:
+                speedup = slowest[1]['mean'] / fastest[1]['mean']
+                print(f"⚡ Max Speedup: {speedup:.1f}× ({fastest[0]} vs {slowest[0]})")
+
+            # Calculate coefficient of variation for each config
+            print("\n📈 Stability Ranking (Lower CV = More Stable):")
+            stability_ranked = sorted(timing_data.items(),
+                                    key=lambda x: (x[1]['std'] / x[1]['mean']) if x[1]['mean'] > 0 else float('inf'))
+
+            for i, (config, data) in enumerate(stability_ranked[:3], 1):
+                cv = (data['std'] / data['mean'] * 100) if data['mean'] > 0 else 0
+                print(f"  {i}. {config}: CV = {cv:.1f}%")
+
+        except Exception as e:
+            print(f"❌ Error generating performance summary: {e}")
+
+    def generate_timing_plot(self):
+        """Generate timing comparison plots for different configurations"""
+        if not PLOTTING_AVAILABLE:
+            print("⚠️ Skipping timing plot generation - plotting libraries not available")
+            return
+
+        if not self.reproducibility_data:
+            print("⚠️ No reproducibility data available for timing plots")
+            return
+
+        try:
+            print("⏱️ Generating timing comparison plots...")
+
+            # Extract timing data from reproducibility results
+            timing_data = {}
+            individual_timings = {}
+
+            for config_name, config_results in self.reproducibility_data.items():
+                if isinstance(config_results, dict) and 'metrics' in config_results:
+                    # Get individual timings if available (exclude first run for cold start)
+                    if 'timings' in config_results:
+                        raw_timings = config_results['timings']
+                        if len(raw_timings) > 1:
+                            # Exclude first run to avoid cold start bias
+                            warm_timings = raw_timings[1:]
+                            individual_timings[config_name] = warm_timings
+
+                            # Recalculate statistics without cold start
+                            mean_duration = np.mean(warm_timings)
+                            std_duration = np.std(warm_timings)
+                            total_duration = np.sum(warm_timings)
+
+                            timing_data[config_name] = {
+                                'mean': mean_duration,
+                                'std': std_duration,
+                                'total': total_duration,
+                                'cold_start_time': raw_timings[0],
+                                'num_warm_runs': len(warm_timings)
+                            }
+
+                            print(f"   📊 {config_name}: Excluded cold start time ({raw_timings[0]:.3f}s), using {len(warm_timings)} warm runs")
+                        else:
+                            # Not enough data to exclude cold start
+                            individual_timings[config_name] = raw_timings
+                            timing_metrics = config_results['metrics'].get('timing', {})
+                            if timing_metrics:
+                                timing_data[config_name] = {
+                                    'mean': timing_metrics.get('mean_duration', 0),
+                                    'std': timing_metrics.get('std_duration', 0),
+                                    'total': timing_metrics.get('total_duration', 0),
+                                    'cold_start_time': None,
+                                    'num_warm_runs': len(raw_timings)
+                                }
+                            print(f"   ⚠️ {config_name}: Not enough runs to exclude cold start (only {len(raw_timings)} runs)")
+                    else:
+                        # Fallback to summary statistics if individual timings not available
+                        timing_metrics = config_results['metrics'].get('timing', {})
+                        if timing_metrics:
+                            timing_data[config_name] = {
+                                'mean': timing_metrics.get('mean_duration', 0),
+                                'std': timing_metrics.get('std_duration', 0),
+                                'total': timing_metrics.get('total_duration', 0),
+                                'cold_start_time': None,
+                                'num_warm_runs': None
+                            }
+                            print(f"   ℹ️ {config_name}: Using summary statistics (individual timings not available)")
+
+            if not timing_data:
+                print("⚠️ No timing data found in reproducibility results")
+                return
+
+            # Create timing comparison plots
+            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+
+            # 1. Mean execution time comparison
+            configs = list(timing_data.keys())
+            mean_times = [timing_data[config]['mean'] for config in configs]
+            std_times = [timing_data[config]['std'] for config in configs]
+
+            # Color by precision type
+            colors = []
+            for config in configs:
+                if 'FP32' in config:
+                    colors.append('#1f77b4')  # Blue
+                elif 'FP16' in config:
+                    colors.append('#ff7f0e')  # Orange
+                elif 'BF16' in config:
+                    colors.append('#2ca02c')  # Green
+                elif 'TF32' in config:
+                    colors.append('#d62728')  # Red
+                else:
+                    colors.append('#9467bd')  # Purple
+
+            bars1 = ax1.bar(range(len(configs)), mean_times, yerr=std_times,
+                           capsize=5, color=colors, alpha=0.7, edgecolor='black')
+            ax1.set_xlabel('Configuration', fontsize=12, fontweight='bold')
+            ax1.set_ylabel('Mean Execution Time (seconds)', fontsize=12, fontweight='bold')
+            ax1.set_title('Mean Execution Time by Configuration\n(Cold Start Excluded)', fontsize=14, fontweight='bold')
+            ax1.set_xticks(range(len(configs)))
+            ax1.set_xticklabels([config.replace(' ', '\n') for config in configs],
+                               rotation=45, ha='right', fontsize=10)
+            ax1.grid(True, alpha=0.3)            # Add value labels on bars
+            for i, (bar, mean_time, std_time) in enumerate(zip(bars1, mean_times, std_times)):
+                height = bar.get_height()
+                ax1.text(bar.get_x() + bar.get_width()/2., height + std_time + 0.01,
+                        f'{mean_time:.3f}s', ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+            # 2. Total execution time comparison
+            total_times = [timing_data[config]['total'] for config in configs]
+            bars2 = ax2.bar(range(len(configs)), total_times, color=colors, alpha=0.7, edgecolor='black')
+            ax2.set_xlabel('Configuration', fontsize=12, fontweight='bold')
+            ax2.set_ylabel('Total Execution Time (seconds)', fontsize=12, fontweight='bold')
+            ax2.set_title('Total Execution Time by Configuration\n(Cold Start Excluded)', fontsize=14, fontweight='bold')
+            ax2.set_xticks(range(len(configs)))
+            ax2.set_xticklabels([config.replace(' ', '\n') for config in configs],
+                               rotation=45, ha='right', fontsize=10)
+            ax2.grid(True, alpha=0.3)            # Add value labels on bars
+            for i, (bar, total_time) in enumerate(zip(bars2, total_times)):
+                height = bar.get_height()
+                ax2.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                        f'{total_time:.3f}s', ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+            # 3. Timing variability (coefficient of variation)
+            cv_values = []
+            for config in configs:
+                mean_val = timing_data[config]['mean']
+                std_val = timing_data[config]['std']
+                cv = (std_val / mean_val * 100) if mean_val > 0 else 0
+                cv_values.append(cv)
+
+            bars3 = ax3.bar(range(len(configs)), cv_values, color=colors, alpha=0.7, edgecolor='black')
+            ax3.set_xlabel('Configuration', fontsize=12, fontweight='bold')
+            ax3.set_ylabel('Coefficient of Variation (%)', fontsize=12, fontweight='bold')
+            ax3.set_title('Timing Variability by Configuration\n(Cold Start Excluded)', fontsize=14, fontweight='bold')
+            ax3.set_xticks(range(len(configs)))
+            ax3.set_xticklabels([config.replace(' ', '\n') for config in configs],
+                               rotation=45, ha='right', fontsize=10)
+            ax3.grid(True, alpha=0.3)            # Add value labels on bars
+            for i, (bar, cv) in enumerate(zip(bars3, cv_values)):
+                height = bar.get_height()
+                ax3.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                        f'{cv:.1f}%', ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+            # 4. Individual timing distributions (box plot)
+            if individual_timings:
+                timing_values = []
+                timing_labels = []
+                for config in configs:
+                    if config in individual_timings:
+                        timing_values.append(individual_timings[config])
+                        timing_labels.append(config.replace(' ', '\n'))
+
+                if timing_values:
+                    box_plot = ax4.boxplot(timing_values, labels=timing_labels, patch_artist=True)
+
+                    # Color the boxes
+                    for patch, color in zip(box_plot['boxes'], colors[:len(timing_values)]):
+                        patch.set_facecolor(color)
+                        patch.set_alpha(0.7)
+
+                    ax4.set_xlabel('Configuration', fontsize=12, fontweight='bold')
+                    ax4.set_ylabel('Individual Run Times (seconds)', fontsize=12, fontweight='bold')
+                    ax4.set_title('Timing Distribution by Configuration\n(Cold Start Excluded)', fontsize=14, fontweight='bold')
+                    ax4.tick_params(axis='x', rotation=45, labelsize=10)
+                    ax4.grid(True, alpha=0.3)
+                else:
+                    ax4.text(0.5, 0.5, 'No individual timing data available',
+                            ha='center', va='center', transform=ax4.transAxes, fontsize=12)
+                    ax4.set_title('Individual Timing Distributions', fontsize=14, fontweight='bold')
+            else:
+                ax4.text(0.5, 0.5, 'No individual timing data available',
+                        ha='center', va='center', transform=ax4.transAxes, fontsize=12)
+                ax4.set_title('Individual Timing Distributions', fontsize=14, fontweight='bold')
+
+            # Overall plot formatting
+            plt.suptitle('Embedding Generation Timing Analysis\n(Cold Start Times Excluded)', fontsize=18, fontweight='bold', y=0.98)
+            plt.tight_layout()
+
+            # Save timing plot
+            timing_output_path = self.analyze_dir / 'embedding_timing_analysis.png'
+            plt.savefig(timing_output_path, dpi=300, bbox_inches='tight', facecolor='white')
+            plt.close()
+
+            print(f"⏱️ Timing analysis plot saved to: {timing_output_path}")
+
+            # Generate timing summary statistics
+            self._generate_timing_summary(timing_data, individual_timings)
+
+        except Exception as e:
+            print(f"❌ Error generating timing plots: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _generate_timing_summary(self, timing_data: Dict, individual_timings: Dict):
+        """Generate and save timing summary statistics"""
+        try:
+            print("📊 Generating timing summary statistics...")
+
+            # Calculate performance metrics
+            summary_stats = {}
+
+            for config_name, timings in timing_data.items():
+                mean_time = timings['mean']
+                std_time = timings['std']
+                total_time = timings['total']
+
+                # Calculate texts per second (assuming 10 texts as shown in the reproducibility script)
+                num_texts = 10  # This should match the number of texts in the test
+                texts_per_second = num_texts / mean_time if mean_time > 0 else 0
+                time_per_text = mean_time / num_texts if num_texts > 0 else mean_time
+
+                cv = (std_time / mean_time * 100) if mean_time > 0 else 0
+
+                summary_stats[config_name] = {
+                    'mean_time_seconds': mean_time,
+                    'std_time_seconds': std_time,
+                    'total_time_seconds': total_time,
+                    'coefficient_of_variation_percent': cv,
+                    'texts_per_second': texts_per_second,
+                    'time_per_text_seconds': time_per_text,
+                    'cold_start_time_seconds': timings.get('cold_start_time'),
+                    'num_warm_runs': timings.get('num_warm_runs')
+                }
+
+            # Sort by mean execution time
+            sorted_configs = sorted(summary_stats.items(), key=lambda x: x[1]['mean_time_seconds'])
+
+            # Save detailed timing summary
+            timing_summary_file = self.analyze_dir / 'timing_summary.json'
+            with open(timing_summary_file, 'w') as f:
+                json.dump({
+                    'timestamp': datetime.now().isoformat(),
+                    'note': 'Cold start times (first run) were excluded from statistics to avoid initialization bias',
+                    'summary_statistics': dict(sorted_configs),
+                    'fastest_configuration': sorted_configs[0][0] if sorted_configs else None,
+                    'slowest_configuration': sorted_configs[-1][0] if sorted_configs else None,
+                    'individual_timings_warm_only': individual_timings
+                }, f, indent=2, cls=NumpyEncoder)
+
+            print(f"📊 Timing summary saved to: {timing_summary_file}")
+
+            # Print performance ranking
+            print("\n⚡ Performance Ranking (Fastest to Slowest, Cold Start Excluded):")
+            for i, (config_name, stats) in enumerate(sorted_configs, 1):
+                mean_time = stats['mean_time_seconds']
+                texts_per_sec = stats['texts_per_second']
+                cv = stats['coefficient_of_variation_percent']
+                cold_start = stats.get('cold_start_time_seconds')
+                num_warm = stats.get('num_warm_runs')
+
+                print(f"  {i}. {config_name}")
+                print(f"     Mean Time: {mean_time:.3f}s | Texts/sec: {texts_per_sec:.1f} | CV: {cv:.1f}%")
+                if cold_start is not None:
+                    print(f"     Cold Start: {cold_start:.3f}s | Warm Runs: {num_warm}")
+                else:
+                    print(f"     Warm Runs: {num_warm if num_warm else 'N/A'}")
+
+        except Exception as e:
+            print(f"❌ Error generating timing summary: {e}")
+
     def run_analysis(self):
         """Run complete analysis pipeline"""
         print("🚀 Starting Embedding Uncertainty Analysis")
@@ -1192,6 +1603,12 @@ class EmbeddingUncertaintyAnalyzer:
         # Generate heatmaps for precision comparisons
         self.generate_precision_heatmaps(analysis)
 
+        # Generate mean execution time plot (simple focused view)
+        self.generate_mean_execution_time_plot()
+
+        # Generate comprehensive timing analysis plots
+        self.generate_timing_plot()
+
         print("\n" + "=" * 60)
         print("✅ Analysis Complete!")
 
@@ -1213,8 +1630,55 @@ class EmbeddingUncertaintyAnalyzer:
         return True
 
 
+def generate_mean_execution_time_only(results_dir="results"):
+    """
+    Standalone function to generate only the mean execution time plot
+
+    Args:
+        results_dir: Directory containing the embedding_reproducibility_results.json file
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    print("⏱️ Generating Mean Execution Time Plot")
+    print("=" * 40)
+
+    analyzer = EmbeddingUncertaintyAnalyzer(results_dir)
+
+    # Load only reproducibility data
+    if not analyzer.load_embedding_reproducibility_results():
+        print("❌ Failed to load embedding reproducibility results.")
+        print("   Make sure 'embedding_reproducibility_results.json' exists in the results directory.")
+        return False
+
+    # Generate just the mean execution time plot
+    analyzer.generate_mean_execution_time_plot()
+
+    print("\n✅ Mean execution time plot generated successfully!")
+    print(f"📁 Check: {analyzer.analyze_dir}/mean_execution_time_plot.png")
+    return True
+
+
 def main():
     """Main function to run the analysis"""
+    import sys
+
+    # Check command line arguments
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--mean-time-only":
+            results_dir = sys.argv[2] if len(sys.argv) > 2 else "results"
+            success = generate_mean_execution_time_only(results_dir)
+            if not success:
+                sys.exit(1)
+            return
+        elif sys.argv[1] == "--timing-only":
+            results_dir = sys.argv[2] if len(sys.argv) > 2 else "results"
+            success = generate_standalone_timing_plot_only(results_dir)
+            if not success:
+                sys.exit(1)
+            return
+
+    # Run full analysis
     analyzer = EmbeddingUncertaintyAnalyzer("results")
     success = analyzer.run_analysis()
 
