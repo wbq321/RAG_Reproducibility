@@ -611,7 +611,7 @@ class GenericDatasetLoader(BaseDatasetLoader):
             }
         }
 
-        return stats
+        return self._convert_numpy_types(stats)
 
 
 class MSMARCOLoader(GenericDatasetLoader):
