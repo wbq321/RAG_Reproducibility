@@ -6,6 +6,9 @@ This tests if the same embedding configuration produces identical results when r
 import sys
 import os
 
+# Set CUDA environment variables for deterministic behavior before importing torch
+os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+
 # Add src directory to path
 sys.path.append('src')
 
@@ -34,7 +37,8 @@ def run_embedding_reproducibility():
 
     print("🔬 Starting Embedding Reproducibility Testing")
     print(f"📍 Model: {model_path}")
-    print(f"📝 Testing with fixed sentence for pure reproducibility analysis")
+    print(f"� CUBLAS_WORKSPACE_CONFIG set to: {os.environ.get('CUBLAS_WORKSPACE_CONFIG', 'Not set')}")
+    print(f"�📝 Testing with fixed sentence for pure reproducibility analysis")
     print(f"📋 Test sentence: '{test_sentence}'")
     print("🔄 Testing same config multiple times for reproducibility")
 

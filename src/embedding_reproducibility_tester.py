@@ -6,6 +6,10 @@ Uses real MS MARCO dataset for realistic reproducibility testing
 
 import os
 import sys
+
+# Set CUDA environment variables for deterministic behavior before importing torch
+os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+
 import json
 import time
 import torch
@@ -80,6 +84,14 @@ class EmbeddingReproducibilityTester:
 
     def _setup_environment(self):
         """Setup deterministic or non-deterministic environment"""
+        
+        # Check CUBLAS workspace configuration for deterministic operations
+        cublas_config = os.environ.get('CUBLAS_WORKSPACE_CONFIG')
+        if cublas_config:
+            logger.info(f"CUBLAS_WORKSPACE_CONFIG is set to: {cublas_config}")
+        else:
+            logger.warning("CUBLAS_WORKSPACE_CONFIG not set - deterministic operations may fail on CUDA >= 10.2")
+        
         if self.config.deterministic:
             torch.manual_seed(42)
             np.random.seed(42)
@@ -93,8 +105,11 @@ class EmbeddingReproducibilityTester:
                 torch.use_deterministic_algorithms(True)
                 logger.info("Deterministic algorithms enabled for maximum reproducibility")
             except Exception as e:
-                logger.warning(f"Could not enable deterministic algorithms: {e}")
-                logger.info("Continuing with other deterministic settings")
+                logger.error(f"Failed to enable deterministic algorithms: {e}")
+                if "CUBLAS_WORKSPACE_CONFIG" in str(e):
+                    logger.error("Set environment variable: CUBLAS_WORKSPACE_CONFIG=:4096:8")
+                    logger.error("This should be set before importing torch")
+                raise e
         else:
             # Non-deterministic mode - use different random seeds for true variability
             import random
