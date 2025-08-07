@@ -17,6 +17,11 @@ Features:
 
 import os
 import sys
+
+# Set environment for offline mode (cluster compatibility)
+os.environ['TRANSFORMERS_OFFLINE'] = '1'
+os.environ['HF_DATASETS_OFFLINE'] = '1'
+
 import json
 import time
 import logging
@@ -130,7 +135,8 @@ class CrossModelRetrievalAnalyzer:
                  models_to_test: List[str] = ["bge", "e5", "qw"],
                  top_k: int = 50,
                  data_dir: str = "data",
-                 output_dir: str = "results"):
+                 output_dir: str = "results",
+                 model_base_path: str = "/scratch/user/u.bw269205/shared_models"):
         """
         Initialize the cross-model retrieval analyzer
         
@@ -139,12 +145,21 @@ class CrossModelRetrievalAnalyzer:
             top_k: Number of top documents to retrieve for ranking comparison
             data_dir: Directory containing MSMARCO data
             output_dir: Directory to save results
+            model_base_path: Base path where local models are stored
         """
         self.models_to_test = models_to_test
         self.top_k = top_k
         self.data_dir = Path(data_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
+        self.model_base_path = model_base_path
+        
+        # Model name mapping to local paths
+        self.model_paths = {
+            "bge": f"{model_base_path}/bge_model",
+            "e5": f"{model_base_path}/intfloat_e5-base-v2", 
+            "qw": f"{model_base_path}/Qwen_Qwen3-Embedding-0.6B"
+        }
         
         # Initialize components
         # Create a default embedding config for the tester
@@ -231,9 +246,13 @@ class CrossModelRetrievalAnalyzer:
             logger.info(f"Generating embeddings with {model_name}...")
             start_time = time.time()
             
+            # Get local model path
+            model_path = self.model_paths.get(model_name, model_name)
+            logger.info(f"Using model path: {model_path}")
+            
             # Create model-specific config
             model_config = EmbeddingConfig(
-                model_name=model_name,
+                model_name=model_path,  # Use local path instead of model name
                 precision="fp32",  # Fixed precision for consistency
                 deterministic=True,
                 device=get_device(),
@@ -294,9 +313,13 @@ class CrossModelRetrievalAnalyzer:
         for model_name in self.models_to_test:
             logger.info(f"Generating query embeddings for {model_name}...")
             
+            # Get local model path
+            model_path = self.model_paths.get(model_name, model_name)
+            logger.info(f"Using model path: {model_path}")
+            
             # Create model-specific config
             model_config = EmbeddingConfig(
-                model_name=model_name,
+                model_name=model_path,  # Use local path instead of model name
                 precision="fp32",  # Fixed precision for consistency
                 deterministic=True,
                 device=get_device(),
@@ -839,6 +862,8 @@ def main():
                        help="Directory containing MSMARCO data (default: data)")
     parser.add_argument("--output-dir", default="results",
                        help="Output directory for results (default: results)")
+    parser.add_argument("--model-base-path", default="/scratch/user/u.bw269205/shared_models",
+                       help="Base path for local models (default: /scratch/user/u.bw269205/shared_models)")
     
     args = parser.parse_args()
     
@@ -847,7 +872,8 @@ def main():
         models_to_test=args.models,
         top_k=args.top_k,
         data_dir=args.data_dir,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        model_base_path=args.model_base_path
     )
     
     # Run analysis
