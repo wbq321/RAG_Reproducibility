@@ -12,7 +12,15 @@ Features:
 - Top-50 retrieval analysis
 - Four ranking correlation metrics
 - Fixed precision (FP32) to isolate model differences
-- Publication-ready visualizations with 30pt fonts
+- Publication-ready visualizations with 24pt fonts
+- Full reproducibility with fixed random seeds
+
+REPRODUCIBILITY MEASURES:
+- Fixed random seed (42) for all random operations
+- Deterministic PyTorch operations enabled
+- Environment variables set for CUDA determinism
+- Consistent sampling strategies in dataset loading
+- Fixed precision (FP32) for all embeddings
 """
 
 import os
@@ -21,6 +29,10 @@ import sys
 # Set environment for offline mode (cluster compatibility)
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
 os.environ['HF_DATASETS_OFFLINE'] = '1'
+
+# Set environment variables for deterministic behavior
+os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+os.environ['PYTHONHASHSEED'] = '42'
 
 import json
 import time
@@ -34,7 +46,13 @@ from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 from collections import defaultdict
 import warnings
+import random
 warnings.filterwarnings('ignore')
+
+# Set all random seeds for reproducibility
+RANDOM_SEED = 42
+random.seed(RANDOM_SEED)
+np.random.seed(RANDOM_SEED)
 
 # Add the necessary directories to the path
 script_dir = Path(__file__).parent / "scripts"
@@ -51,6 +69,17 @@ from dataset_loader import load_dataset_for_reproducibility
 # PyTorch for device detection
 try:
     import torch
+    
+    # Set PyTorch seeds for reproducibility
+    torch.manual_seed(RANDOM_SEED)
+    torch.cuda.manual_seed(RANDOM_SEED)
+    torch.cuda.manual_seed_all(RANDOM_SEED)
+    
+    # Enable deterministic algorithms
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True)
+    
     def get_device():
         return "cuda" if torch.cuda.is_available() else "cpu"
 except ImportError:
@@ -189,11 +218,27 @@ class CrossModelRetrievalAnalyzer:
         logger.info(f"Models to test: {models_to_test}")
         logger.info(f"Top-K retrieval: {top_k}")
         logger.info(f"Fixed precision: FP32")
+        logger.info(f"Random seed: {RANDOM_SEED}")
+
+    def _set_reproducible_seeds(self):
+        """Reinitialize all random seeds for reproducible results"""
+        random.seed(RANDOM_SEED)
+        np.random.seed(RANDOM_SEED)
+        try:
+            import torch
+            torch.manual_seed(RANDOM_SEED)
+            torch.cuda.manual_seed(RANDOM_SEED)
+            torch.cuda.manual_seed_all(RANDOM_SEED)
+        except ImportError:
+            pass
 
     def load_msmarco_data(self, max_documents: int = 5000, max_queries: int = 100) -> Tuple[List[Dict], List[str]]:
         """
         Load MSMARCO dataset using existing infrastructure
         """
+        # Reset seeds for reproducible data loading
+        self._set_reproducible_seeds()
+        
         logger.info("Loading MSMARCO dataset...")
 
         # Try multiple possible MSMARCO file locations
@@ -219,7 +264,7 @@ class CrossModelRetrievalAnalyzer:
 
         logger.info(f"Found MSMARCO data at: {msmarco_path}")
 
-        # Load using existing dataset loader
+        # Load using existing dataset loader with seed for reproducibility
         documents, queries = load_dataset_for_reproducibility(
             file_path=str(msmarco_path),
             dataset_type="ms_marco",
@@ -227,7 +272,8 @@ class CrossModelRetrievalAnalyzer:
             num_queries=max_queries,
             data_dir=str(self.data_dir),
             doc_sampling="diverse",
-            query_strategy="first_sentence"
+            query_strategy="first_sentence",
+            force_reload=False  # Use cached data if available for consistency
         )
 
         self.documents = documents
@@ -240,6 +286,9 @@ class CrossModelRetrievalAnalyzer:
         """
         Generate embeddings for all models with fixed FP32 precision
         """
+        # Reset seeds for reproducible embedding generation
+        self._set_reproducible_seeds()
+        
         logger.info("Generating embeddings for all models...")
 
         # Prepare document texts
@@ -309,6 +358,9 @@ class CrossModelRetrievalAnalyzer:
         """
         Perform retrieval for all queries across all models
         """
+        # Reset seeds for reproducible retrieval
+        self._set_reproducible_seeds()
+        
         logger.info(f"Performing top-{self.top_k} retrieval for all models...")
 
         # Generate query embeddings for each model
@@ -984,7 +1036,11 @@ class CrossModelRetrievalAnalyzer:
         """
         Run the complete cross-model retrieval ranking correlation analysis
         """
+        # Ensure reproducible results by resetting all seeds
+        self._set_reproducible_seeds()
+        
         logger.info("Starting complete cross-model retrieval analysis...")
+        logger.info(f"Using random seed: {RANDOM_SEED} for reproducibility")
         start_time = time.time()
 
         try:
