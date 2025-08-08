@@ -86,7 +86,7 @@ plt.rcParams.update({
     'font.weight': 'bold',
     'axes.titleweight': 'bold',
     'axes.labelweight': 'bold',
-    'figure.figsize': (28, 14),
+    'figure.figsize': (10, 6),  # Much smaller default size for papers
     'axes.linewidth': 2,
     'grid.linewidth': 1.5,
     'lines.linewidth': 3,
@@ -586,7 +586,7 @@ class CrossModelRetrievalAnalyzer:
         overlap_coeffs = [corr.overlap_coefficient for corr in self.correlations]
         
         # Create comprehensive correlation plot
-        fig, axes = plt.subplots(2, 2, figsize=(40, 28))
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))  # Much smaller for papers
         fig.suptitle('Cross-Model Retrieval Ranking Correlations', fontsize=44, fontweight='bold', y=0.95)
         
         # 1. Kendall's Tau
@@ -719,7 +719,7 @@ class CrossModelRetrievalAnalyzer:
         })
         
         # 1. Kendall's Tau Violin Plot
-        plt.figure(figsize=(28, 14))
+        plt.figure(figsize=(10, 6))  # Smaller size for papers
         sns.violinplot(data=df, x='Model_Pair', y='Kendall_Tau', 
                       palette="viridis", inner="box")
         plt.title("Kendall's Tau Distribution Across Queries", fontsize=40, fontweight='bold')
@@ -738,7 +738,7 @@ class CrossModelRetrievalAnalyzer:
         logger.info(f"Saved Kendall's Tau violin plot to {kendall_path}")
         
         # 2. RBO Violin Plot
-        plt.figure(figsize=(28, 14))
+        plt.figure(figsize=(10, 6))  # Smaller size for papers
         sns.violinplot(data=df, x='Model_Pair', y='RBO', 
                       palette="viridis", inner="box")
         plt.title("Rank-Biased Overlap Distribution Across Queries", fontsize=40, fontweight='bold')
@@ -757,7 +757,7 @@ class CrossModelRetrievalAnalyzer:
         logger.info(f"Saved RBO violin plot to {rbo_path}")
         
         # 3. Overlap Coefficient Violin Plot
-        plt.figure(figsize=(28, 14))
+        plt.figure(figsize=(10, 6))  # Smaller size for papers
         sns.violinplot(data=df, x='Model_Pair', y='Overlap_Coefficient', 
                       palette="viridis", inner="box")
         plt.title("Overlap Coefficient Distribution Across Queries", fontsize=40, fontweight='bold')
@@ -785,7 +785,7 @@ class CrossModelRetrievalAnalyzer:
         logger.info("Creating correlation box plots...")
         
         # 1. Kendall's Tau Box Plot
-        plt.figure(figsize=(28, 14))
+        plt.figure(figsize=(10, 6))  # Smaller size for papers
         box1 = plt.boxplot([df[df['Model_Pair'] == pair]['Kendall_Tau'] for pair in df['Model_Pair'].unique()],
                            labels=df['Model_Pair'].unique(),
                            patch_artist=True,
@@ -815,7 +815,7 @@ class CrossModelRetrievalAnalyzer:
         logger.info(f"Saved Kendall's Tau box plot to {kendall_box_path}")
         
         # 2. RBO Box Plot
-        plt.figure(figsize=(28, 14))
+        plt.figure(figsize=(10, 6))  # Smaller size for papers
         box2 = plt.boxplot([df[df['Model_Pair'] == pair]['RBO'] for pair in df['Model_Pair'].unique()],
                            labels=df['Model_Pair'].unique(),
                            patch_artist=True,
@@ -843,7 +843,7 @@ class CrossModelRetrievalAnalyzer:
         logger.info(f"Saved RBO box plot to {rbo_box_path}")
         
         # 3. Overlap Coefficient Box Plot
-        plt.figure(figsize=(28, 14))
+        plt.figure(figsize=(10, 6))  # Smaller size for papers
         box3 = plt.boxplot([df[df['Model_Pair'] == pair]['Overlap_Coefficient'] for pair in df['Model_Pair'].unique()],
                            labels=df['Model_Pair'].unique(),
                            patch_artist=True,
@@ -896,7 +896,7 @@ class CrossModelRetrievalAnalyzer:
             overlap_matrix[j, i] = corr.overlap_coefficient
         
         # Create heatmaps
-        fig, axes = plt.subplots(1, 3, figsize=(45, 12))
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))  # Much smaller for papers
         
         # Kendall's Tau heatmap
         sns.heatmap(kendall_matrix, annot=True, fmt='.3f', cmap='RdBu_r', center=0,
