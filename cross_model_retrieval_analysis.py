@@ -713,7 +713,7 @@ class CrossModelRetrievalAnalyzer:
         
         # 1. Kendall's Tau Violin Plot
         plt.figure(figsize=(28, 14))
-        sns.violinplot(data=df, x='Model_Pair', y='Kendall_Tau', kind="violin", 
+        sns.violinplot(data=df, x='Model_Pair', y='Kendall_Tau', 
                       palette="viridis", inner="box")
         plt.title("Kendall's Tau Distribution Across Queries", fontsize=32)
         plt.xlabel("Model Pairs", fontsize=30)
@@ -732,7 +732,7 @@ class CrossModelRetrievalAnalyzer:
         
         # 2. RBO Violin Plot
         plt.figure(figsize=(28, 14))
-        sns.violinplot(data=df, x='Model_Pair', y='RBO', kind="violin", 
+        sns.violinplot(data=df, x='Model_Pair', y='RBO', 
                       palette="viridis", inner="box")
         plt.title("Rank-Biased Overlap Distribution Across Queries", fontsize=32)
         plt.xlabel("Model Pairs", fontsize=30)
@@ -751,7 +751,7 @@ class CrossModelRetrievalAnalyzer:
         
         # 3. Overlap Coefficient Violin Plot
         plt.figure(figsize=(28, 14))
-        sns.violinplot(data=df, x='Model_Pair', y='Overlap_Coefficient', kind="violin", 
+        sns.violinplot(data=df, x='Model_Pair', y='Overlap_Coefficient', 
                       palette="viridis", inner="box")
         plt.title("Overlap Coefficient Distribution Across Queries", fontsize=32)
         plt.xlabel("Model Pairs", fontsize=30)
