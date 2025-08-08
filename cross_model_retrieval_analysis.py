@@ -659,7 +659,7 @@ class CrossModelRetrievalAnalyzer:
     
     def _create_correlation_distribution_plots(self):
         """
-        Create distribution plots showing the spread of correlation metrics across queries
+        Create violin plots showing the distribution of correlation metrics across queries
         """
         logger.info("Creating correlation distribution plots...")
         
@@ -702,10 +702,6 @@ class CrossModelRetrievalAnalyzer:
                 all_overlap_coeffs.extend(overlap_coeffs)
                 pair_labels.extend([pair_label] * len(kendall_taus))
         
-        # Create distribution plots
-        fig, axes = plt.subplots(1, 3, figsize=(45, 12))
-        fig.suptitle('Distribution of Correlation Metrics Across Queries', fontsize=36, y=0.95)
-        
         # Prepare data for plotting
         # Create DataFrame for easier plotting
         df = pd.DataFrame({
@@ -715,98 +711,81 @@ class CrossModelRetrievalAnalyzer:
             'Model_Pair': pair_labels
         })
         
-        # Define colors for each model pair
-        colors = ['steelblue', 'forestgreen', 'darkorange']
-        
-        # 1. Kendall's Tau Distribution
-        for idx, pair in enumerate(df['Model_Pair'].unique()):
-            pair_data = df[df['Model_Pair'] == pair]['Kendall_Tau']
-            axes[0].hist(pair_data, bins=20, alpha=0.7, label=pair, color=colors[idx], density=True)
-        
-        axes[0].set_title("Kendall's Tau Distribution", fontsize=32)
-        axes[0].set_xlabel("Kendall's τ", fontsize=30)
-        axes[0].set_ylabel("Density", fontsize=30)
-        axes[0].set_xlim(-1, 1)
-        axes[0].legend(fontsize=24)
-        axes[0].grid(True, alpha=0.3)
-        
-        # Add mean lines
-        for idx, pair in enumerate(df['Model_Pair'].unique()):
-            pair_data = df[df['Model_Pair'] == pair]['Kendall_Tau']
-            mean_val = pair_data.mean()
-            axes[0].axvline(mean_val, color=colors[idx], linestyle='--', linewidth=3, alpha=0.8)
-            axes[0].text(mean_val + 0.05, axes[0].get_ylim()[1] * 0.9, f'μ={mean_val:.3f}', 
-                        color=colors[idx], fontsize=20, rotation=90, ha='left')
-        
-        # 2. RBO Distribution
-        for idx, pair in enumerate(df['Model_Pair'].unique()):
-            pair_data = df[df['Model_Pair'] == pair]['RBO']
-            axes[1].hist(pair_data, bins=20, alpha=0.7, label=pair, color=colors[idx], density=True)
-        
-        axes[1].set_title("Rank-Biased Overlap Distribution", fontsize=32)
-        axes[1].set_xlabel("RBO", fontsize=30)
-        axes[1].set_ylabel("Density", fontsize=30)
-        axes[1].set_xlim(0, 1)
-        axes[1].legend(fontsize=24)
-        axes[1].grid(True, alpha=0.3)
-        
-        # Add mean lines
-        for idx, pair in enumerate(df['Model_Pair'].unique()):
-            pair_data = df[df['Model_Pair'] == pair]['RBO']
-            mean_val = pair_data.mean()
-            axes[1].axvline(mean_val, color=colors[idx], linestyle='--', linewidth=3, alpha=0.8)
-            axes[1].text(mean_val + 0.02, axes[1].get_ylim()[1] * 0.9, f'μ={mean_val:.3f}', 
-                        color=colors[idx], fontsize=20, rotation=90, ha='left')
-        
-        # 3. Overlap Coefficient Distribution
-        for idx, pair in enumerate(df['Model_Pair'].unique()):
-            pair_data = df[df['Model_Pair'] == pair]['Overlap_Coefficient']
-            axes[2].hist(pair_data, bins=20, alpha=0.7, label=pair, color=colors[idx], density=True)
-        
-        axes[2].set_title("Overlap Coefficient Distribution", fontsize=32)
-        axes[2].set_xlabel("Overlap Coefficient", fontsize=30)
-        axes[2].set_ylabel("Density", fontsize=30)
-        axes[2].set_xlim(0, 1)
-        axes[2].legend(fontsize=24)
-        axes[2].grid(True, alpha=0.3)
-        
-        # Add mean lines
-        for idx, pair in enumerate(df['Model_Pair'].unique()):
-            pair_data = df[df['Model_Pair'] == pair]['Overlap_Coefficient']
-            mean_val = pair_data.mean()
-            axes[2].axvline(mean_val, color=colors[idx], linestyle='--', linewidth=3, alpha=0.8)
-            axes[2].text(mean_val + 0.02, axes[2].get_ylim()[1] * 0.9, f'μ={mean_val:.3f}', 
-                        color=colors[idx], fontsize=20, rotation=90, ha='left')
-        
+        # 1. Kendall's Tau Violin Plot
+        plt.figure(figsize=(28, 14))
+        sns.violinplot(data=df, x='Model_Pair', y='Kendall_Tau', kind="violin", 
+                      palette="viridis", inner="box")
+        plt.title("Kendall's Tau Distribution Across Queries", fontsize=32)
+        plt.xlabel("Model Pairs", fontsize=30)
+        plt.ylabel("Kendall's τ", fontsize=30)
+        plt.ylim(-1, 1)
+        plt.xticks(rotation=45, fontsize=28)
+        plt.yticks(fontsize=28)
+        plt.grid(True, alpha=0.3)
         plt.tight_layout()
         
-        # Save distribution plot
-        dist_path = self.output_dir / "correlation_distributions.png"
-        plt.savefig(dist_path, dpi=300, bbox_inches='tight')
+        # Save Kendall's Tau violin plot
+        kendall_path = self.output_dir / "kendall_tau_violin.png"
+        plt.savefig(kendall_path, dpi=300, bbox_inches='tight')
         plt.close()
+        logger.info(f"Saved Kendall's Tau violin plot to {kendall_path}")
         
-        logger.info(f"Saved correlation distribution plots to {dist_path}")
+        # 2. RBO Violin Plot
+        plt.figure(figsize=(28, 14))
+        sns.violinplot(data=df, x='Model_Pair', y='RBO', kind="violin", 
+                      palette="viridis", inner="box")
+        plt.title("Rank-Biased Overlap Distribution Across Queries", fontsize=32)
+        plt.xlabel("Model Pairs", fontsize=30)
+        plt.ylabel("RBO", fontsize=30)
+        plt.ylim(0, 1)
+        plt.xticks(rotation=45, fontsize=28)
+        plt.yticks(fontsize=28)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        # Save RBO violin plot
+        rbo_path = self.output_dir / "rbo_violin.png"
+        plt.savefig(rbo_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        logger.info(f"Saved RBO violin plot to {rbo_path}")
+        
+        # 3. Overlap Coefficient Violin Plot
+        plt.figure(figsize=(28, 14))
+        sns.violinplot(data=df, x='Model_Pair', y='Overlap_Coefficient', kind="violin", 
+                      palette="viridis", inner="box")
+        plt.title("Overlap Coefficient Distribution Across Queries", fontsize=32)
+        plt.xlabel("Model Pairs", fontsize=30)
+        plt.ylabel("Overlap Coefficient", fontsize=30)
+        plt.ylim(0, 1)
+        plt.xticks(rotation=45, fontsize=28)
+        plt.yticks(fontsize=28)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        # Save Overlap Coefficient violin plot
+        overlap_path = self.output_dir / "overlap_coefficient_violin.png"
+        plt.savefig(overlap_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        logger.info(f"Saved Overlap Coefficient violin plot to {overlap_path}")
         
         # Create box plots for clearer statistical comparison
         self._create_correlation_boxplots(df)
     
     def _create_correlation_boxplots(self, df):
         """
-        Create box plots showing statistical distribution of correlation metrics
+        Create separate box plots showing statistical distribution of correlation metrics
         """
         logger.info("Creating correlation box plots...")
         
-        fig, axes = plt.subplots(1, 3, figsize=(45, 12))
-        fig.suptitle('Statistical Distribution of Correlation Metrics', fontsize=36, y=0.95)
-        
         # 1. Kendall's Tau Box Plot
-        box1 = axes[0].boxplot([df[df['Model_Pair'] == pair]['Kendall_Tau'] for pair in df['Model_Pair'].unique()],
-                               labels=df['Model_Pair'].unique(),
-                               patch_artist=True,
-                               boxprops=dict(linewidth=2),
-                               whiskerprops=dict(linewidth=2),
-                               capprops=dict(linewidth=2),
-                               medianprops=dict(linewidth=3, color='red'))
+        plt.figure(figsize=(28, 14))
+        box1 = plt.boxplot([df[df['Model_Pair'] == pair]['Kendall_Tau'] for pair in df['Model_Pair'].unique()],
+                           labels=df['Model_Pair'].unique(),
+                           patch_artist=True,
+                           boxprops=dict(linewidth=2),
+                           whiskerprops=dict(linewidth=2),
+                           capprops=dict(linewidth=2),
+                           medianprops=dict(linewidth=3, color='red'))
         
         # Color the boxes
         colors = ['steelblue', 'forestgreen', 'darkorange']
@@ -814,58 +793,75 @@ class CrossModelRetrievalAnalyzer:
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
         
-        axes[0].set_title("Kendall's Tau Box Plot", fontsize=32)
-        axes[0].set_ylabel("Kendall's τ", fontsize=30)
-        axes[0].set_ylim(-1, 1)
-        axes[0].grid(True, alpha=0.3)
-        axes[0].tick_params(axis='x', rotation=45)
+        plt.title("Kendall's Tau Statistical Distribution", fontsize=32)
+        plt.ylabel("Kendall's τ", fontsize=30)
+        plt.ylim(-1, 1)
+        plt.grid(True, alpha=0.3)
+        plt.xticks(rotation=45, fontsize=28)
+        plt.yticks(fontsize=28)
+        plt.tight_layout()
+        
+        # Save Kendall's Tau box plot
+        kendall_box_path = self.output_dir / "kendall_tau_boxplot.png"
+        plt.savefig(kendall_box_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        logger.info(f"Saved Kendall's Tau box plot to {kendall_box_path}")
         
         # 2. RBO Box Plot
-        box2 = axes[1].boxplot([df[df['Model_Pair'] == pair]['RBO'] for pair in df['Model_Pair'].unique()],
-                               labels=df['Model_Pair'].unique(),
-                               patch_artist=True,
-                               boxprops=dict(linewidth=2),
-                               whiskerprops=dict(linewidth=2),
-                               capprops=dict(linewidth=2),
-                               medianprops=dict(linewidth=3, color='red'))
+        plt.figure(figsize=(28, 14))
+        box2 = plt.boxplot([df[df['Model_Pair'] == pair]['RBO'] for pair in df['Model_Pair'].unique()],
+                           labels=df['Model_Pair'].unique(),
+                           patch_artist=True,
+                           boxprops=dict(linewidth=2),
+                           whiskerprops=dict(linewidth=2),
+                           capprops=dict(linewidth=2),
+                           medianprops=dict(linewidth=3, color='red'))
         
         for patch, color in zip(box2['boxes'], colors):
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
         
-        axes[1].set_title("Rank-Biased Overlap Box Plot", fontsize=32)
-        axes[1].set_ylabel("RBO", fontsize=30)
-        axes[1].set_ylim(0, 1)
-        axes[1].grid(True, alpha=0.3)
-        axes[1].tick_params(axis='x', rotation=45)
+        plt.title("Rank-Biased Overlap Statistical Distribution", fontsize=32)
+        plt.ylabel("RBO", fontsize=30)
+        plt.ylim(0, 1)
+        plt.grid(True, alpha=0.3)
+        plt.xticks(rotation=45, fontsize=28)
+        plt.yticks(fontsize=28)
+        plt.tight_layout()
+        
+        # Save RBO box plot
+        rbo_box_path = self.output_dir / "rbo_boxplot.png"
+        plt.savefig(rbo_box_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        logger.info(f"Saved RBO box plot to {rbo_box_path}")
         
         # 3. Overlap Coefficient Box Plot
-        box3 = axes[2].boxplot([df[df['Model_Pair'] == pair]['Overlap_Coefficient'] for pair in df['Model_Pair'].unique()],
-                               labels=df['Model_Pair'].unique(),
-                               patch_artist=True,
-                               boxprops=dict(linewidth=2),
-                               whiskerprops=dict(linewidth=2),
-                               capprops=dict(linewidth=2),
-                               medianprops=dict(linewidth=3, color='red'))
+        plt.figure(figsize=(28, 14))
+        box3 = plt.boxplot([df[df['Model_Pair'] == pair]['Overlap_Coefficient'] for pair in df['Model_Pair'].unique()],
+                           labels=df['Model_Pair'].unique(),
+                           patch_artist=True,
+                           boxprops=dict(linewidth=2),
+                           whiskerprops=dict(linewidth=2),
+                           capprops=dict(linewidth=2),
+                           medianprops=dict(linewidth=3, color='red'))
         
         for patch, color in zip(box3['boxes'], colors):
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
         
-        axes[2].set_title("Overlap Coefficient Box Plot", fontsize=32)
-        axes[2].set_ylabel("Overlap Coefficient", fontsize=30)
-        axes[2].set_ylim(0, 1)
-        axes[2].grid(True, alpha=0.3)
-        axes[2].tick_params(axis='x', rotation=45)
-        
+        plt.title("Overlap Coefficient Statistical Distribution", fontsize=32)
+        plt.ylabel("Overlap Coefficient", fontsize=30)
+        plt.ylim(0, 1)
+        plt.grid(True, alpha=0.3)
+        plt.xticks(rotation=45, fontsize=28)
+        plt.yticks(fontsize=28)
         plt.tight_layout()
         
-        # Save box plot
-        box_path = self.output_dir / "correlation_boxplots.png"
-        plt.savefig(box_path, dpi=300, bbox_inches='tight')
+        # Save Overlap Coefficient box plot
+        overlap_box_path = self.output_dir / "overlap_coefficient_boxplot.png"
+        plt.savefig(overlap_box_path, dpi=300, bbox_inches='tight')
         plt.close()
-        
-        logger.info(f"Saved correlation box plots to {box_path}")
+        logger.info(f"Saved Overlap Coefficient box plot to {overlap_box_path}")
 
     def _create_correlation_matrix_heatmap(self):
         """
