@@ -73,15 +73,15 @@ except ImportError:
     print("SciPy not found. Please install with: pip install scipy")
     sys.exit(1)
 
-# Set publication-ready 40pt bold fonts
+# Set publication-ready 24pt bold fonts
 plt.rcParams.update({
-    'font.size': 40,
-    'axes.titlesize': 40,
-    'axes.labelsize': 40,
-    'xtick.labelsize': 40,
-    'ytick.labelsize': 40,
-    'legend.fontsize': 40,
-    'figure.titlesize': 40,
+    'font.size': 24,
+    'axes.titlesize': 24,
+    'axes.labelsize': 24,
+    'xtick.labelsize': 24,
+    'ytick.labelsize': 24,
+    'legend.fontsize': 24,
+    'figure.titlesize': 24,
     'font.family': 'DejaVu Sans',
     'font.weight': 'bold',
     'axes.titleweight': 'bold',
@@ -587,46 +587,46 @@ class CrossModelRetrievalAnalyzer:
         
         # Create comprehensive correlation plot
         fig, axes = plt.subplots(2, 2, figsize=(12, 10))  # Much smaller for papers
-        fig.suptitle('Cross-Model Retrieval Ranking Correlations', fontsize=44, fontweight='bold', y=0.95)
+        fig.suptitle('Cross-Model Retrieval Ranking Correlations', fontsize=26, fontweight='bold', y=0.95)
         
         # 1. Kendall's Tau
         axes[0, 0].bar(model_pairs, kendall_taus, color='steelblue', alpha=0.8)
-        axes[0, 0].set_title("Kendall's Tau Correlation", fontsize=40, fontweight='bold')
-        axes[0, 0].set_ylabel("Kendall's τ", fontsize=40, fontweight='bold')
+        axes[0, 0].set_title("Kendall's Tau Correlation", fontsize=24, fontweight='bold')
+        axes[0, 0].set_ylabel("Kendall's τ", fontsize=24, fontweight='bold')
         axes[0, 0].set_ylim(-1, 1)
         axes[0, 0].grid(True, alpha=0.3)
-        axes[0, 0].tick_params(axis='x', rotation=45, labelsize=36)
-        axes[0, 0].tick_params(axis='y', labelsize=36)
+        axes[0, 0].tick_params(axis='x', rotation=45, labelsize=22)
+        axes[0, 0].tick_params(axis='y', labelsize=22)
         
         # Add value labels
         for i, v in enumerate(kendall_taus):
-            axes[0, 0].text(i, v + 0.05, f'{v:.3f}', ha='center', va='bottom', fontsize=34, fontweight='bold')
+            axes[0, 0].text(i, v + 0.05, f'{v:.3f}', ha='center', va='bottom', fontsize=20, fontweight='bold')
         
         # 2. Rank-Biased Overlap
         axes[0, 1].bar(model_pairs, rbos, color='forestgreen', alpha=0.8)
-        axes[0, 1].set_title("Rank-Biased Overlap", fontsize=40, fontweight='bold')
-        axes[0, 1].set_ylabel("RBO", fontsize=40, fontweight='bold')
+        axes[0, 1].set_title("Rank-Biased Overlap", fontsize=24, fontweight='bold')
+        axes[0, 1].set_ylabel("RBO", fontsize=24, fontweight='bold')
         axes[0, 1].set_ylim(0, 1)
         axes[0, 1].grid(True, alpha=0.3)
-        axes[0, 1].tick_params(axis='x', rotation=45, labelsize=36)
-        axes[0, 1].tick_params(axis='y', labelsize=36)
+        axes[0, 1].tick_params(axis='x', rotation=45, labelsize=22)
+        axes[0, 1].tick_params(axis='y', labelsize=22)
         
         # Add value labels
         for i, v in enumerate(rbos):
-            axes[0, 1].text(i, v + 0.02, f'{v:.3f}', ha='center', va='bottom', fontsize=34, fontweight='bold')
+            axes[0, 1].text(i, v + 0.02, f'{v:.3f}', ha='center', va='bottom', fontsize=20, fontweight='bold')
         
         # 3. Overlap Coefficient
         axes[1, 0].bar(model_pairs, overlap_coeffs, color='darkorange', alpha=0.8)
-        axes[1, 0].set_title("Overlap Coefficient", fontsize=40, fontweight='bold')
-        axes[1, 0].set_ylabel("Overlap Coefficient", fontsize=40, fontweight='bold')
+        axes[1, 0].set_title("Overlap Coefficient", fontsize=24, fontweight='bold')
+        axes[1, 0].set_ylabel("Overlap Coefficient", fontsize=24, fontweight='bold')
         axes[1, 0].set_ylim(0, 1)
         axes[1, 0].grid(True, alpha=0.3)
-        axes[1, 0].tick_params(axis='x', rotation=45, labelsize=36)
-        axes[1, 0].tick_params(axis='y', labelsize=36)
+        axes[1, 0].tick_params(axis='x', rotation=45, labelsize=22)
+        axes[1, 0].tick_params(axis='y', labelsize=22)
         
         # Add value labels
         for i, v in enumerate(overlap_coeffs):
-            axes[1, 0].text(i, v + 0.02, f'{v:.3f}', ha='center', va='bottom', fontsize=34, fontweight='bold')
+            axes[1, 0].text(i, v + 0.02, f'{v:.3f}', ha='center', va='bottom', fontsize=20, fontweight='bold')
         
         # 4. Overlap Origin Analysis
         top_10_overlaps = [corr.overlap_origin["top_10"] for corr in self.correlations]
@@ -640,13 +640,13 @@ class CrossModelRetrievalAnalyzer:
         axes[1, 1].bar(x, top_20_overlaps, width, label='Top-20', color='gold', alpha=0.8)
         axes[1, 1].bar(x + width, top_50_overlaps, width, label='Top-50', color='purple', alpha=0.8)
         
-        axes[1, 1].set_title("Overlap Origin Analysis", fontsize=40, fontweight='bold')
-        axes[1, 1].set_ylabel("Proportion of Common Items", fontsize=40, fontweight='bold')
+        axes[1, 1].set_title("Overlap Origin Analysis", fontsize=24, fontweight='bold')
+        axes[1, 1].set_ylabel("Proportion of Common Items", fontsize=24, fontweight='bold')
         axes[1, 1].set_xticks(x)
-        axes[1, 1].set_xticklabels(model_pairs, rotation=45, fontsize=36)
-        axes[1, 1].tick_params(axis='y', labelsize=36)
+        axes[1, 1].set_xticklabels(model_pairs, rotation=45, fontsize=22)
+        axes[1, 1].tick_params(axis='y', labelsize=22)
         axes[1, 1].set_ylim(0, 1)
-        axes[1, 1].legend(fontsize=36)
+        axes[1, 1].legend(fontsize=22)
         axes[1, 1].grid(True, alpha=0.3)
         
         plt.tight_layout()
@@ -722,12 +722,12 @@ class CrossModelRetrievalAnalyzer:
         plt.figure(figsize=(10, 6))  # Smaller size for papers
         sns.violinplot(data=df, x='Model_Pair', y='Kendall_Tau', 
                       palette="viridis", inner="box")
-        plt.title("Kendall's Tau Distribution Across Queries", fontsize=40, fontweight='bold')
-        plt.xlabel("Model Pairs", fontsize=40, fontweight='bold')
-        plt.ylabel("Kendall's τ", fontsize=40, fontweight='bold')
+        plt.title("Kendall's Tau Distribution Across Queries", fontsize=24, fontweight='bold')
+        plt.xlabel("Model Pairs", fontsize=24, fontweight='bold')
+        plt.ylabel("Kendall's τ", fontsize=24, fontweight='bold')
         plt.ylim(-1, 1)
-        plt.xticks(rotation=45, fontsize=38)
-        plt.yticks(fontsize=38)
+        plt.xticks(rotation=45, fontsize=22)
+        plt.yticks(fontsize=22)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         
@@ -741,12 +741,12 @@ class CrossModelRetrievalAnalyzer:
         plt.figure(figsize=(10, 6))  # Smaller size for papers
         sns.violinplot(data=df, x='Model_Pair', y='RBO', 
                       palette="viridis", inner="box")
-        plt.title("Rank-Biased Overlap Distribution Across Queries", fontsize=40, fontweight='bold')
-        plt.xlabel("Model Pairs", fontsize=40, fontweight='bold')
-        plt.ylabel("RBO", fontsize=40, fontweight='bold')
+        plt.title("Rank-Biased Overlap Distribution Across Queries", fontsize=24, fontweight='bold')
+        plt.xlabel("Model Pairs", fontsize=24, fontweight='bold')
+        plt.ylabel("RBO", fontsize=24, fontweight='bold')
         plt.ylim(0, 1)
-        plt.xticks(rotation=45, fontsize=38)
-        plt.yticks(fontsize=38)
+        plt.xticks(rotation=45, fontsize=22)
+        plt.yticks(fontsize=22)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         
@@ -760,12 +760,12 @@ class CrossModelRetrievalAnalyzer:
         plt.figure(figsize=(10, 6))  # Smaller size for papers
         sns.violinplot(data=df, x='Model_Pair', y='Overlap_Coefficient', 
                       palette="viridis", inner="box")
-        plt.title("Overlap Coefficient Distribution Across Queries", fontsize=40, fontweight='bold')
-        plt.xlabel("Model Pairs", fontsize=40, fontweight='bold')
-        plt.ylabel("Overlap Coefficient", fontsize=40, fontweight='bold')
+        plt.title("Overlap Coefficient Distribution Across Queries", fontsize=24, fontweight='bold')
+        plt.xlabel("Model Pairs", fontsize=24, fontweight='bold')
+        plt.ylabel("Overlap Coefficient", fontsize=24, fontweight='bold')
         plt.ylim(0, 1)
-        plt.xticks(rotation=45, fontsize=38)
-        plt.yticks(fontsize=38)
+        plt.xticks(rotation=45, fontsize=22)
+        plt.yticks(fontsize=22)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         
@@ -800,12 +800,12 @@ class CrossModelRetrievalAnalyzer:
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
         
-        plt.title("Kendall's Tau Statistical Distribution", fontsize=40, fontweight='bold')
-        plt.ylabel("Kendall's τ", fontsize=40, fontweight='bold')
+        plt.title("Kendall's Tau Statistical Distribution", fontsize=24, fontweight='bold')
+        plt.ylabel("Kendall's τ", fontsize=24, fontweight='bold')
         plt.ylim(-1, 1)
         plt.grid(True, alpha=0.3)
-        plt.xticks(rotation=45, fontsize=38)
-        plt.yticks(fontsize=38)
+        plt.xticks(rotation=45, fontsize=22)
+        plt.yticks(fontsize=22)
         plt.tight_layout()
         
         # Save Kendall's Tau box plot
@@ -828,12 +828,12 @@ class CrossModelRetrievalAnalyzer:
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
         
-        plt.title("Rank-Biased Overlap Statistical Distribution", fontsize=40, fontweight='bold')
-        plt.ylabel("RBO", fontsize=40, fontweight='bold')
+        plt.title("Rank-Biased Overlap Statistical Distribution", fontsize=24, fontweight='bold')
+        plt.ylabel("RBO", fontsize=24, fontweight='bold')
         plt.ylim(0, 1)
         plt.grid(True, alpha=0.3)
-        plt.xticks(rotation=45, fontsize=38)
-        plt.yticks(fontsize=38)
+        plt.xticks(rotation=45, fontsize=22)
+        plt.yticks(fontsize=22)
         plt.tight_layout()
         
         # Save RBO box plot
@@ -856,12 +856,12 @@ class CrossModelRetrievalAnalyzer:
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
         
-        plt.title("Overlap Coefficient Statistical Distribution", fontsize=40, fontweight='bold')
-        plt.ylabel("Overlap Coefficient", fontsize=40, fontweight='bold')
+        plt.title("Overlap Coefficient Statistical Distribution", fontsize=24, fontweight='bold')
+        plt.ylabel("Overlap Coefficient", fontsize=24, fontweight='bold')
         plt.ylim(0, 1)
         plt.grid(True, alpha=0.3)
-        plt.xticks(rotation=45, fontsize=38)
-        plt.yticks(fontsize=38)
+        plt.xticks(rotation=45, fontsize=22)
+        plt.yticks(fontsize=22)
         plt.tight_layout()
         
         # Save Overlap Coefficient box plot
@@ -902,25 +902,25 @@ class CrossModelRetrievalAnalyzer:
         sns.heatmap(kendall_matrix, annot=True, fmt='.3f', cmap='RdBu_r', center=0,
                    xticklabels=self.models_to_test, yticklabels=self.models_to_test,
                    ax=axes[0], square=True, cbar_kws={'shrink': 0.8},
-                   annot_kws={'fontsize': 36, 'fontweight': 'bold'})
-        axes[0].set_title("Kendall's Tau Matrix", fontsize=40, fontweight='bold')
-        axes[0].tick_params(axis='both', labelsize=38)
+                   annot_kws={'fontsize': 22, 'fontweight': 'bold'})
+        axes[0].set_title("Kendall's Tau Matrix", fontsize=24, fontweight='bold')
+        axes[0].tick_params(axis='both', labelsize=22)
         
         # RBO heatmap
         sns.heatmap(rbo_matrix, annot=True, fmt='.3f', cmap='Greens',
                    xticklabels=self.models_to_test, yticklabels=self.models_to_test,
                    ax=axes[1], square=True, cbar_kws={'shrink': 0.8},
-                   annot_kws={'fontsize': 36, 'fontweight': 'bold'})
-        axes[1].set_title("Rank-Biased Overlap Matrix", fontsize=40, fontweight='bold')
-        axes[1].tick_params(axis='both', labelsize=38)
+                   annot_kws={'fontsize': 22, 'fontweight': 'bold'})
+        axes[1].set_title("Rank-Biased Overlap Matrix", fontsize=24, fontweight='bold')
+        axes[1].tick_params(axis='both', labelsize=22)
         
         # Overlap Coefficient heatmap
         sns.heatmap(overlap_matrix, annot=True, fmt='.3f', cmap='Oranges',
                    xticklabels=self.models_to_test, yticklabels=self.models_to_test,
                    ax=axes[2], square=True, cbar_kws={'shrink': 0.8},
-                   annot_kws={'fontsize': 36, 'fontweight': 'bold'})
-        axes[2].set_title("Overlap Coefficient Matrix", fontsize=40, fontweight='bold')
-        axes[2].tick_params(axis='both', labelsize=38)
+                   annot_kws={'fontsize': 22, 'fontweight': 'bold'})
+        axes[2].set_title("Overlap Coefficient Matrix", fontsize=24, fontweight='bold')
+        axes[2].tick_params(axis='both', labelsize=22)
         
         plt.tight_layout()
         
