@@ -722,12 +722,12 @@ class CrossModelRetrievalAnalyzer:
         plt.figure(figsize=(15, 12))  # Smaller size for papers
         sns.violinplot(data=df, x='Model_Pair', y='Kendall_Tau',
                       palette="viridis", inner="box")
-        plt.title("Kendall's Tau Distribution Across Queries", fontsize=24, fontweight='bold')
-        plt.xlabel("Model Pairs", fontsize=24, fontweight='bold')
-        plt.ylabel("Kendall's τ", fontsize=24, fontweight='bold')
+        plt.title("Kendall's Tau Distribution Across Queries", fontsize=30, fontweight='bold')
+        plt.xlabel("Model Pairs", fontsize=30, fontweight='bold')
+        plt.ylabel("Kendall's τ", fontsize=30, fontweight='bold')
         plt.ylim(-1, 1)
-        plt.xticks(rotation=45, fontsize=22)
-        plt.yticks(fontsize=26)
+        plt.xticks(rotation=45, fontsize=30)
+        plt.yticks(fontsize=30)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
 
@@ -738,15 +738,15 @@ class CrossModelRetrievalAnalyzer:
         logger.info(f"Saved Kendall's Tau violin plot to {kendall_path}")
 
         # 2. RBO Violin Plot
-        plt.figure(figsize=(10, 6))  # Smaller size for papers
+        plt.figure(figsize=(15, 12))  # Smaller size for papers
         sns.violinplot(data=df, x='Model_Pair', y='RBO',
                       palette="viridis", inner="box")
-        plt.title("Rank-Biased Overlap Distribution Across Queries", fontsize=24, fontweight='bold')
-        plt.xlabel("Model Pairs", fontsize=24, fontweight='bold')
-        plt.ylabel("RBO", fontsize=24, fontweight='bold')
+        plt.title("Rank-Biased Overlap Distribution Across Queries", fontsize=30, fontweight='bold')
+        plt.xlabel("Model Pairs", fontsize=30, fontweight='bold')
+        plt.ylabel("RBO", fontsize=30, fontweight='bold')
         plt.ylim(0, 1)
-        plt.xticks(rotation=45, fontsize=22)
-        plt.yticks(fontsize=22)
+        plt.xticks(rotation=45, fontsize=30)
+        plt.yticks(fontsize=30)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
 
@@ -757,15 +757,15 @@ class CrossModelRetrievalAnalyzer:
         logger.info(f"Saved RBO violin plot to {rbo_path}")
 
         # 3. Overlap Coefficient Violin Plot
-        plt.figure(figsize=(10, 6))  # Smaller size for papers
+        plt.figure(figsize=(15, 12))  # Smaller size for papers
         sns.violinplot(data=df, x='Model_Pair', y='Overlap_Coefficient',
                       palette="viridis", inner="box")
-        plt.title("Overlap Coefficient Distribution Across Queries", fontsize=24, fontweight='bold')
-        plt.xlabel("Model Pairs", fontsize=24, fontweight='bold')
-        plt.ylabel("Overlap Coefficient", fontsize=24, fontweight='bold')
+        plt.title("Overlap Coefficient Distribution Across Queries", fontsize=30, fontweight='bold')
+        plt.xlabel("Model Pairs", fontsize=30, fontweight='bold')
+        plt.ylabel("Overlap Coefficient", fontsize=30, fontweight='bold')
         plt.ylim(0, 1)
-        plt.xticks(rotation=45, fontsize=22)
-        plt.yticks(fontsize=22)
+        plt.xticks(rotation=45, fontsize=30)
+        plt.yticks(fontsize=30)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
 
